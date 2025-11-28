@@ -424,6 +424,38 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(adjacentSolid.powerState).toBe("unpowered")
   })
 
+  it("dust line shape only points in connected directions", () => {
+    const engine = new Engine()
+
+    // E-W dust line: dust1 -- dust2 -- dust3
+    engine.placeBlock(new Solid(v(-1, -1, 0)))
+    engine.placeBlock(new Solid(v(0, -1, 0)))
+    engine.placeBlock(new Solid(v(1, -1, 0)))
+    const dust1 = new Dust(v(-1, 0, 0))
+    const dust2 = new Dust(v(0, 0, 0))
+    const dust3 = new Dust(v(1, 0, 0))
+    engine.placeBlock(dust1)
+    engine.placeBlock(dust2)
+    engine.placeBlock(dust3)
+
+    // Piston to the North of dust2 (not in line direction)
+    engine.placeBlock(new Solid(v(0, -1, -1)))
+    const piston = new Piston(v(0, 0, -1), Y)
+    engine.placeBlock(piston)
+
+    // Power the line via lever on dust1
+    engine.placeBlock(new Solid(v(-2, 0, 0)))
+    const lever = new Lever(v(-2, 1, 0), Y.neg, v(-2, 0, 0))
+    engine.placeBlock(lever)
+
+    engine.interact(lever.pos)
+    expect(dust2.signalStrength).toBe(14)
+
+    // Piston should NOT activate - dust2 only points E-W, not North
+    tickN(engine, 4)
+    expect(piston.extended).toBe(false)
+  })
+
   it("piston fails to push extended piston", () => {
     const engine = new Engine()
 
@@ -634,7 +666,9 @@ describe("Redstone Engine - Edge Cases", () => {
   it("pressure plate variants and strongly powers block beneath", () => {
     const engine = new Engine()
 
-    const variants: Array<["wood" | "stone" | "light_weighted" | "heavy_weighted", number, number]> = [
+    const variants: Array<
+      ["wood" | "stone" | "light_weighted" | "heavy_weighted", number, number]
+    > = [
       ["wood", 1, 15],
       ["light_weighted", 5, 5],
       ["heavy_weighted", 25, 3],
@@ -646,7 +680,7 @@ describe("Redstone Engine - Edge Cases", () => {
       const plate = new PressurePlate(v(i * 2, 1, 0), variant)
       engine.placeBlock(plate)
 
-      engine.setEntityCount(plate.pos, entityCount)
+      engine.setEntityCount(plate.pos, { all: entityCount, mobs: entityCount })
       expect(plate.active).toBe(true)
       expect(plate.getOutputSignal()).toBe(expectedOutput)
       expect(base.powerState).toBe("strongly-powered")

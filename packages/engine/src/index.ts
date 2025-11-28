@@ -286,7 +286,8 @@ import type { RedstoneBlock } from "./blocks/redstone-block.js"
 import type { PressurePlate } from "./blocks/pressure-plate.js"
 import type { Comparator } from "./blocks/comparator.js"
 
-export { Engine } from "./engine.js"
+export { Engine, type EventHandler } from "./engine.js"
+export { type EngineEvent } from "./events.js"
 export {
   type Snapshot,
   type BlockState,

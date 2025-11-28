@@ -17,17 +17,6 @@ export class Dust {
   toggleShape(): void {
     this.shape = this.shape === "cross" ? "dot" : "cross"
   }
-
-  isPointingAt(target: Vec): boolean {
-    if (this.shape === "dot") return false
-
-    const dx = target.x - this.pos.x
-    const dz = target.z - this.pos.z
-    const dy = target.y - this.pos.y
-
-    if (dy !== 0) return false
-    return (Math.abs(dx) === 1 && dz === 0) || (dx === 0 && Math.abs(dz) === 1)
-  }
 }
 
 import type { BlockType } from "./index.js"

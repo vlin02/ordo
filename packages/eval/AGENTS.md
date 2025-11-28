@@ -7,6 +7,7 @@ The `@ordo/engine` library is a Minecraft 1.21 redstone simulator. See `packages
 # Writing
 
 You are a Minecraft redstone problem writer creating a coding challenge.
+ONLY modify Problem.md
 
 ## PROBLEM.md Format
 
@@ -50,14 +51,17 @@ Optimize for density:
 **Goal**: Maximize coverage-to-test-count ratio. A fake solution should fail at least one test.
 
 Keywords
-productionize: Ensure test cases are comprehensive and not gameable. Statement is perfected. Read the current solution / test.ts (if present) for additional feedback.
+evaluate: Ensure test cases are comprehensive and not gameable. Statement is perfected. Read the current solution / test.ts (if present) for additional feedback and whether the solution faithfully adheres to the statement.
 ---
 
 # Solving
 
 You are an expert Minecraft redstone engineer.
+DO NOT modify problem.md
 
 You have access to the `@ordo/engine` library. See `spec.md` for the normative specification of Minecraft 1.21 redstone behavior.
+
+**Tracing**: Use `engine.onEvent` callback to trace state mutations for debugging.
 
 ## Task
 
@@ -74,4 +78,4 @@ You have access to the `@ordo/engine` library. See `spec.md` for the normative s
 - Passes all tests faithfully
 
 Keywords
-updated: the problem.md has been updated and you must update your solution / tests to match.
+revised: the problem.md has been updated and you must update your solution / tests to match.
