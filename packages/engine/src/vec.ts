@@ -27,6 +27,10 @@ export class Vec {
     return `${this.x},${this.y},${this.z}`
   }
 
+  toString(): string {
+    return `(${this.x},${this.y},${this.z})`
+  }
+
   static fromKey(key: string): Vec {
     const [x, y, z] = key.split(",").map(Number)
     return new Vec(x, y, z)

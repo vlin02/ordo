@@ -76,28 +76,32 @@ export class PowerGraph {
   }
 
   printTo(pos: Vec): string {
+    return this.printTreeTo(pos, new Set(), "")
+  }
+
+  private printTreeTo(pos: Vec, visited: Set<string>, indent: string): string {
+    const key = pos.toKey()
     const node = this.getNode(pos)
-    if (!node) return `No block at ${pos}`
+    
+    if (visited.has(key)) {
+      return `${indent}${this.formatNode(node)} ↩ (cycle)`
+    }
+    
+    visited.add(key)
+    const lines: string[] = [indent + this.formatNode(node)]
     
     const incoming = this.getIncoming(pos)
-    const lines: string[] = []
-    
-    const activated = this.isActivated(node)
-    const status = activated ? "ACTIVATED" : "NOT ACTIVATED"
-    lines.push(`${this.formatNode(node)} ← ${status}`)
-    
-    if (incoming.length === 0) {
-      lines.push("  └─ (no power sources)")
-    } else {
-      for (let i = 0; i < incoming.length; i++) {
-        const edge = incoming[i]
-        const isLast = i === incoming.length - 1
-        const prefix = isLast ? "└─" : "├─"
-        const sourceNode = this.getNode(edge.from)
-        const provides = this.edgeProvidesPower(edge, sourceNode)
-        const mark = provides ? "✓" : "✗"
-        lines.push(`  ${prefix} ${mark} ${this.formatEdge(edge)} from ${this.formatNode(sourceNode)}`)
-      }
+    for (let i = 0; i < incoming.length; i++) {
+      const edge = incoming[i]
+      const isLast = i === incoming.length - 1
+      const prefix = isLast ? "└─" : "├─"
+      const childIndent = indent + (isLast ? "   " : "│  ")
+      const sourceNode = this.getNode(edge.from)
+      const provides = this.edgeProvidesPower(edge, sourceNode)
+      const mark = provides ? "✓" : "✗"
+      
+      lines.push(`${indent}${prefix} ${mark} ${this.formatEdgeType(edge)}`)
+      lines.push(this.printTreeTo(edge.from, visited, childIndent))
     }
     
     return lines.join("\n")

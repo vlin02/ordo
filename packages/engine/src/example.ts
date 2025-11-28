@@ -1,44 +1,53 @@
-import { Engine, Vec, Y, Solid, Lever, Dust, Repeater, Piston, snapshotToUrl } from "./index.js"
+import { buildContraption, type Contraption, type BlockDef } from "./builder.js"
+import { Vec } from "./vec.js"
 
-const engine = new Engine()
+// Shorthand helpers
+const S: BlockDef = { type: "solid" }
+const D: BlockDef = { type: "dust" }
+const _: BlockDef = null
 
-// Floor
-for (let x = 0; x < 6; x++) {
-  engine.placeBlock(new Solid(new Vec(x, -1, 0)))
+const lever: BlockDef = { type: "lever", face: "+y" }
+const button: BlockDef = { type: "button", face: "+y" }
+const plate: BlockDef = { type: "pressure-plate" }
+const torch: BlockDef = { type: "torch", face: "+y" }
+const rblock: BlockDef = { type: "redstone-block" }
+const observer: BlockDef = { type: "observer", facing: "+x" }
+const repeater: BlockDef = { type: "repeater", facing: "+x" }
+const comparator: BlockDef = { type: "comparator", facing: "+x" }
+
+// Each source powers dust to its right
+const powerShowcase: Contraption = {
+  width: 3,
+  length: 8,
+  height: 2,
+  slices: [
+    // Y=0: Floor (solid blocks for torch/lever/button to attach to)
+    [
+      [S, S, S],  // z=0: under lever
+      [S, S, S],  // z=1: under button
+      [S, S, S],  // z=2: under plate
+      [S, S, S],  // z=3: under torch
+      [S, S, S],  // z=4: under redstone block
+      [S, S, S],  // z=5: under observer
+      [S, S, S],  // z=6: under repeater (needs input)
+      [S, S, S],  // z=7: under comparator
+    ],
+    // Y=1: Power sources → dust
+    [
+      [lever, D, D],      // z=0: lever powers dust
+      [button, D, D],     // z=1: button powers dust
+      [plate, D, D],      // z=2: pressure plate powers dust
+      [torch, D, D],      // z=3: torch (lit) powers dust
+      [rblock, D, D],     // z=4: redstone block powers dust
+      [observer, D, D],   // z=5: observer (pulses on block change)
+      [rblock, repeater, D], // z=6: redstone block → repeater → dust
+      [rblock, comparator, D], // z=7: redstone block → comparator → dust
+    ],
+  ],
 }
 
-// Lever → Dust → Repeater → Piston → Target
-engine.placeBlock(new Lever(new Vec(0, 0, 0), Y.neg, new Vec(0, -1, 0)))
-engine.placeBlock(new Dust(new Vec(1, 0, 0)))
-engine.placeBlock(new Dust(new Vec(2, 0, 0)))
-engine.placeBlock(new Repeater(new Vec(3, 0, 0), new Vec(1, 0, 0)))
-engine.placeBlock(new Piston(new Vec(4, 0, 0), new Vec(1, 0, 0)))
-engine.placeBlock(new Solid(new Vec(5, 0, 0)))
+const { engine } = buildContraption(powerShowcase)
 
-console.log("Initial state:")
-console.log("  Tick:", engine.getCurrentTick())
-console.log("  Lever on:", engine.getBlock(new Vec(0, 0, 0))?.type === "lever" && (engine.getBlock(new Vec(0, 0, 0)) as any).on)
-
-// Turn on the lever
-const lever = engine.getBlock(new Vec(0, 0, 0)) as Lever
-engine.interact(lever)
-console.log("\nAfter toggling lever:")
-console.log("  Lever on:", (engine.getBlock(new Vec(0, 0, 0)) as any).on)
-console.log("  Dust signal:", (engine.getBlock(new Vec(1, 0, 0)) as any).signalStrength)
-
-// Wait for repeater delay + piston extension
-for (let i = 0; i < 5; i++) {
-  engine.tick()
-  const repeater = engine.getBlock(new Vec(3, 0, 0)) as any
-  const piston = engine.getBlock(new Vec(4, 0, 0)) as any
-  console.log(`  Tick ${engine.getCurrentTick()}: repeater.outputOn=${repeater.outputOn}, piston.extended=${piston.extended}`)
-}
-
-console.log("\nFinal state:")
-const piston = engine.getBlock(new Vec(4, 0, 0)) as any
-console.log("  Piston extended:", piston.extended)
-
-// Export URL
-const url = snapshotToUrl(engine.toSnapshot(), "http://localhost:5173")
-console.log("\nShareable URL:")
-console.log(url)
+// Show what powers the dust at (1,1,4) - has multiple sources
+const graph = engine.getPowerGraph()
+console.log(graph.printTo(new Vec(1, 1, 4)))

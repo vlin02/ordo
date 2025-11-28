@@ -313,6 +313,16 @@ export { Comparator, type ComparatorMode } from "./blocks/comparator.js"
 export { Vec, X, Y, Z, HORIZONTALS, ALL_DIRECTIONS, type VecObj } from "./vec.js"
 export { PowerGraph, type PowerNode, type PowerEdge, type PowerEdgeType } from "./power-graph.js"
 export { renderSlice, blockSymbol, blockDetails, type SliceAxis } from "./slice.js"
+export {
+  buildContraption,
+  B,
+  type Direction,
+  type BlockDef,
+  type Cell,
+  type Slice,
+  type Contraption,
+  type BuildResult,
+} from "./builder.js"
 
 export type Block =
   | Solid

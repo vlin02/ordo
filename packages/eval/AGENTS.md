@@ -51,17 +51,26 @@ Optimize for density:
 **Goal**: Maximize coverage-to-test-count ratio. A fake solution should fail at least one test.
 
 Keywords
-evaluate: Ensure test cases are comprehensive and not gameable. Statement is perfected. Read the current solution / test.ts (if present) for additional feedback and whether the solution faithfully adheres to the statement.
+evaluate: Ensure test cases are comprehensive and not gameable. Statement is perfected. Read the current solution / test.ts (if present) for additional feedback and whether the solution + tests faithfully adheres to the statement.
 ---
 
 # Solving
 
 You are an expert Minecraft redstone engineer.
 DO NOT modify problem.md
+DO NOT read any files from other folders in src/problems
+
+Prefer a bottom approach validating independent modules / units of behavior as you go, and only building up to the final contraption when confident.
+
+Utilize the debugging tools below to help you debug / validate
 
 You have access to the `@ordo/engine` library. See `spec.md` for the normative specification of Minecraft 1.21 redstone behavior.
+Use the builder, it will help prevent spatial conflicts
 
-**Tracing**: Use `engine.onEvent` callback to trace state mutations for debugging.
+**Debugging Tools**:
+- `engine.onEvent` — trace state mutations
+- `engine.getPowerGraph().printTo(pos)` — show what powers a block
+- `renderSlice(engine.blocks(), axis, value)` — 2D slice visualization
 
 ## Task
 
@@ -78,4 +87,4 @@ You have access to the `@ordo/engine` library. See `spec.md` for the normative s
 - Passes all tests faithfully
 
 Keywords
-revised: the problem.md has been updated and you must update your solution / tests to match.
+resolve: the problem.md has been updated and you must update your solution / tests to match.
