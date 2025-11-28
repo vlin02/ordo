@@ -1,20 +1,13 @@
-spec for spec.md
-
-The spec exhaustively covers all:
-redstone behavior
-visual behavior (ex. redstone dust pattern)
-physical behavior (gravity)
-prevents invalid player interaction (ex. block placement)
-
-for minecraft 1.21 necessary to build a game-accurate engine
-
-The spec maximizes for:
-
-- conciseness
-- unambiguous. Only one interpretation.
-- implementation independent
-- completeness (covers all scope mentioned)
-- accuracy (faithful to 1.21)
+> **Coverage**: Redstone behavior, visual behavior (ex. redstone dust pattern), physical behavior (gravity), player interaction validation (ex. block placement).
+>
+> **Target**: Minecraft 1.21 Java Edition game-accurate engine.
+>
+> **Principles**:
+> - Conciseness
+> - Unambiguous — only one interpretation
+> - Implementation independent
+> - Complete — covers all scope mentioned
+> - Accurate — faithful to 1.21
 
 ---
 

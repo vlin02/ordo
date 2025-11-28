@@ -1,5 +1,5 @@
 import { Vec } from "../vec.js"
-import type { Block } from "../index.js"
+import type { BlockType } from "./index.js"
 
 export type PressurePlateVariant = "wood" | "stone" | "light_weighted" | "heavy_weighted"
 
@@ -59,7 +59,7 @@ export class PressurePlate {
   }
 }
 
-export function shouldPressurePlateDrop(supportBlock: Block | null): boolean {
+export function shouldPressurePlateDrop(supportBlock: { type: BlockType } | null): boolean {
   if (!supportBlock) return true
   return supportBlock.type !== "solid"
 }

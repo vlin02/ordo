@@ -1,25 +1,18 @@
 import { Vec, Y, HORIZONTALS } from "./vec.js"
 import { Solid, type PowerState } from "./blocks/solid.js"
-import { Lever } from "./blocks/lever.js"
-import { Dust } from "./blocks/dust.js"
+import { shouldLeverDrop } from "./blocks/lever.js"
+import { Dust, isDustSupported } from "./blocks/dust.js"
 import { Piston } from "./blocks/piston.js"
 import { StickyPiston } from "./blocks/sticky-piston.js"
-import { Repeater } from "./blocks/repeater.js"
-import { Torch } from "./blocks/torch.js"
+import { Repeater, shouldRepeaterDrop } from "./blocks/repeater.js"
+import { Torch, shouldTorchDrop } from "./blocks/torch.js"
 import { Observer } from "./blocks/observer.js"
-import { Button } from "./blocks/button.js"
-import { Slime } from "./blocks/slime.js"
-import { RedstoneBlock } from "./blocks/redstone-block.js"
-import { PressurePlate } from "./blocks/pressure-plate.js"
-import { Comparator } from "./blocks/comparator.js"
-import type { Block } from "./index.js"
-import { shouldLeverDrop } from "./blocks/lever.js"
-import { isDustSupported } from "./blocks/dust.js"
-import { shouldRepeaterDrop } from "./blocks/repeater.js"
-import { shouldTorchDrop } from "./blocks/torch.js"
 import { shouldButtonDrop } from "./blocks/button.js"
-import { shouldPressurePlateDrop } from "./blocks/pressure-plate.js"
-import { shouldComparatorDrop } from "./blocks/comparator.js"
+import { Slime } from "./blocks/slime.js"
+import { PressurePlate, shouldPressurePlateDrop } from "./blocks/pressure-plate.js"
+import { Comparator, shouldComparatorDrop } from "./blocks/comparator.js"
+import type { Block } from "./blocks/index.js"
+import { type Snapshot, serializeBlock, deserializeBlock } from "./snapshot.js"
 
 export class Engine {
   private grid: Map<string, Block>
@@ -32,6 +25,40 @@ export class Engine {
     this.tickCounter = 0
     this.updateQueue = new Set()
     this.events = new Map()
+  }
+
+  toSnapshot(): Snapshot {
+    return {
+      tickCounter: this.tickCounter,
+      blocks: Array.from(this.grid.values()).map(serializeBlock),
+      events: Array.from(this.events).map(([tick, keys]) => ({
+        tick,
+        positions: Array.from(keys),
+      })),
+    }
+  }
+
+  static fromSnapshot(snapshot: Snapshot): Engine {
+    const engine = new Engine()
+
+    for (const blockState of snapshot.blocks) {
+      const block = deserializeBlock(blockState)
+      engine.grid.set(block.pos.toKey(), block)
+    }
+
+    for (const { tick, positions } of snapshot.events ?? []) {
+      for (const pos of positions) {
+        let set = engine.events.get(tick)
+        if (!set) {
+          set = new Set()
+          engine.events.set(tick, set)
+        }
+        set.add(pos)
+      }
+    }
+
+    engine.tickCounter = snapshot.tickCounter ?? 0
+    return engine
   }
 
   tick(): void {
@@ -230,8 +257,14 @@ export class Engine {
         if (changed) {
           this.notifyObserversAt(pos)
           const diagonalOffsets = [
-            new Vec(1, -1, 0), new Vec(-1, -1, 0), new Vec(0, -1, 1), new Vec(0, -1, -1),
-            new Vec(1, 1, 0), new Vec(-1, 1, 0), new Vec(0, 1, 1), new Vec(0, 1, -1)
+            new Vec(1, -1, 0),
+            new Vec(-1, -1, 0),
+            new Vec(0, -1, 1),
+            new Vec(0, -1, -1),
+            new Vec(1, 1, 0),
+            new Vec(-1, 1, 0),
+            new Vec(0, 1, 1),
+            new Vec(0, 1, -1),
           ]
           for (const off of diagonalOffsets) {
             const checkPos = pos.add(off)
@@ -386,6 +419,7 @@ export class Engine {
     const above = pos.add(Y)
     const aboveBlock = this.getBlock(above)
     if (aboveBlock?.type === "pressure-plate" && aboveBlock.active) return true
+    // Note: dust above WEAKLY powers block beneath, not strongly (moved to receivesWeakPower)
 
     return false
   }
@@ -409,9 +443,10 @@ export class Engine {
       }
     }
 
-    const below = pos.add(Y.neg)
-    const belowBlock = this.getBlock(below)
-    if (belowBlock?.type === "dust" && belowBlock.signalStrength >= 1) {
+    // Dust above weakly powers block beneath it
+    const above = pos.add(Y)
+    const aboveBlock = this.getBlock(above)
+    if (aboveBlock?.type === "dust" && aboveBlock.signalStrength >= 1) {
       return true
     }
 
@@ -717,7 +752,10 @@ export class Engine {
       if (adjBlock.type === "redstone-block") return true
       if (adjBlock.type === "pressure-plate" && adjBlock.active) return true
 
-      if ((adjBlock.type === "solid" || adjBlock.type === "slime") && this.isWeaklyPowered(adjPos)) {
+      if (
+        (adjBlock.type === "solid" || adjBlock.type === "slime") &&
+        this.isWeaklyPowered(adjPos)
+      ) {
         return true
       }
 
@@ -888,9 +926,15 @@ export class Engine {
   }
 
   private isBlockDestroyable(block: Block): boolean {
-    return ["dust", "lever", "repeater", "torch", "button", "pressure-plate", "comparator"].includes(
-      block.type
-    )
+    return [
+      "dust",
+      "lever",
+      "repeater",
+      "torch",
+      "button",
+      "pressure-plate",
+      "comparator",
+    ].includes(block.type)
   }
 
   private sortBlocksForPush(positions: Vec[], direction: Vec): Vec[] {
@@ -934,4 +978,5 @@ export class Engine {
       this.triggerBlockUpdate(pos.add(direction))
     }
   }
+
 }

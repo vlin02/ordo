@@ -1,5 +1,5 @@
 import { Vec } from "../vec.js"
-import type { Block } from "../index.js"
+import type { BlockType } from "./index.js"
 
 export type ComparatorMode = "comparison" | "subtraction"
 
@@ -56,7 +56,7 @@ export class Comparator {
   }
 }
 
-export function shouldComparatorDrop(supportBlock: Block | null): boolean {
+export function shouldComparatorDrop(supportBlock: { type: BlockType } | null): boolean {
   if (!supportBlock) return true
   return supportBlock.type !== "solid" && supportBlock.type !== "slime"
 }

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ordo - Redstone Visualizer</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg-dark: #0a0a0f;
+        --surface: #12121a;
+        --surface-hover: #1a1a25;
+        --accent: #ff4444;
+        --accent-glow: rgba(255, 68, 68, 0.4);
+        --text: #e8e8f0;
+        --text-muted: #888899;
+        --border: #2a2a3a;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg-dark);
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--text);
+      }
+
+      #canvas-container {
+        position: fixed;
+        inset: 0;
+      }
+
+      #ui-overlay {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      .panel h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+      }
+
+      .tick-display {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .tick-value {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--accent);
+        text-shadow: 0 0 20px var(--accent-glow);
+      }
+
+      .btn {
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 12px;
+        padding: 8px 14px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn:hover {
+        background: #252530;
+        border-color: var(--accent);
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+
+      .btn.primary:hover {
+        background: #ff6666;
+        box-shadow: 0 0 16px var(--accent-glow);
+      }
+
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      #info {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 100;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      #info kbd {
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 6px;
+        margin: 0 2px;
+      }
+
+      .block-palette {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+
+      .block-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .block-btn.selected {
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+      <div class="panel">
+        <h2>Simulation</h2>
+        <div class="tick-display">
+          <span class="tick-value" id="tick-counter">0</span>
+          <span style="color: var(--text-muted); font-size: 12px">tick</span>
+        </div>
+        <div class="controls" style="margin-top: 12px">
+          <button class="btn primary" id="tick-btn">Tick</button>
+          <button class="btn" id="play-btn">▶ Play</button>
+          <button class="btn" id="share-btn">Share</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Blocks</h2>
+        <div class="block-palette" id="block-palette"></div>
+      </div>
+    </div>
+
+    <div id="info">
+      <kbd>Click</kbd> Interact · <kbd>Shift+Click</kbd> Place · <kbd>Alt+Click</kbd> Remove · <kbd>Scroll</kbd> Zoom · <kbd>Drag</kbd> Rotate
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+

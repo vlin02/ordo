@@ -856,6 +856,20 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(adjacentSolid.powerState).toBe("unpowered")
   })
 
+  it("comparator mode toggles via interact", () => {
+    const engine = new Engine()
+
+    engine.placeBlock(new Solid(v(0, -1, 0)))
+    const comp = new Comparator(v(0, 0, 0), X)
+    engine.placeBlock(comp)
+
+    expect(comp.mode).toBe("comparison")
+    engine.interact(comp.pos)
+    expect(comp.mode).toBe("subtraction")
+    engine.interact(comp.pos)
+    expect(comp.mode).toBe("comparison")
+  })
+
   it("comparator responds to 2gt pulse from observer", () => {
     const engine = new Engine()
 

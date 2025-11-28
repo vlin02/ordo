@@ -13,5 +13,5 @@ happy path should cover large swathts of spec.md while keeping the scenario simp
 add additional tests for edge cases as NECESSARY. Aim to get coverage of the remaining logic in spec.md not covered by the happy path WHILE minimizing the number and complexity of these additional tests
 
 keywords:
-productionize - evaluate adherence + coverage of tests and impl of engine against the spec.md
+productionize - evaluate adherence + FULL coverage of tests and impl of engine against the spec.md.
 cleanup <symbol> - evaluate and any obvious ways to simplify, redundant logic, extract without coupling (only suggest don't execute)

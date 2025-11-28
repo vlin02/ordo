@@ -1,3 +1,5 @@
+export type VecObj = { x: number; y: number; z: number }
+
 export class Vec {
   constructor(
     public readonly x: number,
@@ -28,6 +30,14 @@ export class Vec {
   static fromKey(key: string): Vec {
     const [x, y, z] = key.split(",").map(Number)
     return new Vec(x, y, z)
+  }
+
+  toJSON(): VecObj {
+    return { x: this.x, y: this.y, z: this.z }
+  }
+
+  static fromJSON(obj: VecObj): Vec {
+    return new Vec(obj.x, obj.y, obj.z)
   }
 
   adjacents(): Vec[] {
