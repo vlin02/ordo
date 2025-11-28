@@ -49,6 +49,8 @@ Optimize for density:
 
 **Goal**: Maximize coverage-to-test-count ratio. A fake solution should fail at least one test.
 
+Keywords
+productionize: Ensure test cases are comprehensive and not gameable. Statement is perfected. Read the current solution / test.ts (if present) for additional feedback.
 ---
 
 # Solving
@@ -70,3 +72,6 @@ You have access to the `@ordo/engine` library. See `spec.md` for the normative s
 - KISS, SOLID, DRY
 - Conciseness and simplicity trumps all
 - Passes all tests faithfully
+
+Keywords
+updated: the problem.md has been updated and you must update your solution / tests to match.
