@@ -1,4 +1,4 @@
-import { Vec, Y, HORIZONTALS } from "./vec.js"
+import { Vec, Y, HORIZONTALS, DIAGONALS_Y } from "./vec.js"
 import { Solid, type PowerState } from "./blocks/solid.js"
 import { shouldLeverDrop } from "./blocks/lever.js"
 import { Dust, isDustSupported } from "./blocks/dust.js"
@@ -18,20 +18,20 @@ export class Engine {
   private grid: Map<string, Block>
   private tickCounter: number
   private updateQueue: Set<string>
-  private events: Map<number, Set<string>>
+  readonly scheduledEvents: Map<number, Set<string>>
 
   constructor() {
     this.grid = new Map()
     this.tickCounter = 0
     this.updateQueue = new Set()
-    this.events = new Map()
+    this.scheduledEvents = new Map()
   }
 
   toSnapshot(): Snapshot {
     return {
       tickCounter: this.tickCounter,
       blocks: Array.from(this.grid.values()).map(serializeBlock),
-      events: Array.from(this.events).map(([tick, keys]) => ({
+      events: Array.from(this.scheduledEvents).map(([tick, keys]) => ({
         tick,
         positions: Array.from(keys),
       })),
@@ -48,10 +48,10 @@ export class Engine {
 
     for (const { tick, positions } of snapshot.events ?? []) {
       for (const pos of positions) {
-        let set = engine.events.get(tick)
+        let set = engine.scheduledEvents.get(tick)
         if (!set) {
           set = new Set()
-          engine.events.set(tick, set)
+          engine.scheduledEvents.set(tick, set)
         }
         set.add(pos)
       }
@@ -64,12 +64,12 @@ export class Engine {
   tick(): void {
     this.tickCounter++
 
-    const positions = this.events.get(this.tickCounter)
+    const positions = this.scheduledEvents.get(this.tickCounter)
     if (positions) {
       for (const key of positions) {
         this.updateQueue.add(key)
       }
-      this.events.delete(this.tickCounter)
+      this.scheduledEvents.delete(this.tickCounter)
     }
 
     this.processBlockUpdates()
@@ -77,10 +77,10 @@ export class Engine {
 
   private scheduleEvent(tick: number, pos: Vec): void {
     const key = pos.toKey()
-    if (!this.events.has(tick)) {
-      this.events.set(tick, new Set())
+    if (!this.scheduledEvents.has(tick)) {
+      this.scheduledEvents.set(tick, new Set())
     }
-    this.events.get(tick)!.add(key)
+    this.scheduledEvents.get(tick)!.add(key)
   }
 
   placeBlock(block: Block): void {
@@ -256,17 +256,7 @@ export class Engine {
         changed = oldSignal !== block.signalStrength
         if (changed) {
           this.notifyObserversAt(pos)
-          const diagonalOffsets = [
-            new Vec(1, -1, 0),
-            new Vec(-1, -1, 0),
-            new Vec(0, -1, 1),
-            new Vec(0, -1, -1),
-            new Vec(1, 1, 0),
-            new Vec(-1, 1, 0),
-            new Vec(0, 1, 1),
-            new Vec(0, 1, -1),
-          ]
-          for (const off of diagonalOffsets) {
+          for (const off of DIAGONALS_Y) {
             const checkPos = pos.add(off)
             const checkBlock = this.getBlock(checkPos)
             if (checkBlock?.type === "dust") {
@@ -365,8 +355,8 @@ export class Engine {
     return changed
   }
 
-  // TORCH LOGIC
-  private shouldTorchBeLit(torch: Torch): boolean {
+  // DEBUG: Query methods for observability
+  shouldTorchBeLit(torch: Torch): boolean {
     const attachedBlock = this.getBlock(torch.attachedPos)
     if (!attachedBlock) return true
     if (attachedBlock.type === "redstone-block") return false
@@ -382,8 +372,7 @@ export class Engine {
     return true
   }
 
-  // POWER LOGIC
-  private outputsTo(block: Block, targetPos: Vec): number {
+  outputsTo(block: Block, targetPos: Vec): number {
     if (block.type === "repeater" && block.outputOn) {
       if (block.pos.add(block.facing).equals(targetPos)) return 15
     }
@@ -396,7 +385,7 @@ export class Engine {
     return 0
   }
 
-  private receivesStrongPower(pos: Vec): boolean {
+  receivesStrongPower(pos: Vec): boolean {
     for (const adjPos of pos.adjacents()) {
       const block = this.getBlock(adjPos)
       if (!block) continue
@@ -424,7 +413,7 @@ export class Engine {
     return false
   }
 
-  private receivesWeakPower(pos: Vec): boolean {
+  receivesWeakPower(pos: Vec): boolean {
     if (this.receivesStrongPower(pos)) return true
 
     for (const adjPos of pos.adjacents()) {
@@ -461,11 +450,11 @@ export class Engine {
     return "unpowered"
   }
 
-  private isStronglyPowered(pos: Vec): boolean {
+  isStronglyPowered(pos: Vec): boolean {
     return this.getBlockPowerState(pos) === "strongly-powered"
   }
 
-  private isWeaklyPowered(pos: Vec): boolean {
+  isWeaklyPowered(pos: Vec): boolean {
     const state = this.getBlockPowerState(pos)
     return state === "weakly-powered" || state === "strongly-powered"
   }
@@ -501,8 +490,7 @@ export class Engine {
     return oldState
   }
 
-  // DUST LOGIC
-  private calculateDustSignal(dust: Dust): number {
+  calculateDustSignal(dust: Dust): number {
     if (this.getFullSignalAt(dust.pos)) {
       return 15
     }
@@ -526,7 +514,7 @@ export class Engine {
     dust.signalStrength = this.calculateDustSignal(dust)
   }
 
-  private findDustConnections(dust: Dust): Vec[] {
+  findDustConnections(dust: Dust): Vec[] {
     const connections: Vec[] = []
     const { pos } = dust
 
@@ -598,8 +586,7 @@ export class Engine {
     return connections
   }
 
-  // REPEATER LOGIC
-  private isRepeaterPowered(repeater: Repeater): boolean {
+  isRepeaterPowered(repeater: Repeater): boolean {
     const backPos = repeater.pos.add(repeater.facing.neg)
     const backBlock = this.getBlock(backPos)
 
@@ -689,7 +676,6 @@ export class Engine {
     return this.outputsTo(block, comparatorPos)
   }
 
-  // PISTON LOGIC
   private checkPistonActivation(piston: Piston | StickyPiston): void {
     const shouldActivate = this.shouldPistonActivate(piston)
 
@@ -726,7 +712,7 @@ export class Engine {
     this.triggerBlockUpdate(piston.pos)
   }
 
-  private shouldPistonActivate(piston: Piston | StickyPiston): boolean {
+  shouldPistonActivate(piston: Piston | StickyPiston): boolean {
     if (this.checkPistonActivationAt(piston, piston.pos)) {
       return true
     }

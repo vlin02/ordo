@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "NODE_OPTIONS='--max-http-header-size=65536' vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk"
 import { SPEC } from "@ordo/engine"
 import { z } from "zod"
 import { zodToJsonSchema } from "zod-to-json-schema"
+import { readFile } from "fs/promises"
+import { join } from "path"
 
 const TestCaseSchema = z.object({
   name: z.string().describe("Test name"),
@@ -10,8 +12,7 @@ const TestCaseSchema = z.object({
 
 export const ProblemSchema = z.object({
   title: z.string().describe("Problem title"),
-  description: z.string().describe("Problem description"),
-  requirements: z.array(z.string()).describe("List of requirements"),
+  statement: z.string().describe("Problem statement"),
   testCases: z.array(TestCaseSchema).describe("List of test cases")
 })
 
@@ -22,6 +23,34 @@ const TestCasesSchema = z.object({
 export type TestCase = z.infer<typeof TestCaseSchema>
 export type Problem = z.infer<typeof ProblemSchema>
 
+export type File = { label: string; content: string }
+
+export type WriterContext = {
+  problem?: Problem
+  files?: File[]
+}
+
+const CONTEXT_FILES = ["readme.md", "solution.test.ts", "solution.ts"] as const
+
+export async function readContext(dir: string): Promise<WriterContext> {
+  const raw = JSON.parse(await readFile(join(dir, "problem.json"), "utf-8"))
+  
+  const problem: Problem = {
+    title: raw.title,
+    statement: raw.statement ?? raw.description ?? "",
+    testCases: raw.testCases ?? []
+  }
+
+  const files: File[] = []
+  for (const name of CONTEXT_FILES) {
+    try {
+      files.push({ label: name, content: await readFile(join(dir, name), "utf-8") })
+    } catch { /* optional */ }
+  }
+
+  return { problem, files: files.length ? files : undefined }
+}
+
 export function formatProblem(problem: Problem): string {
   const tests = problem.testCases
     .map(t => `test("${t.name}")\n${t.steps.map(s => `- ${s}`).join("\n")}`)
@@ -29,11 +58,7 @@ export function formatProblem(problem: Problem): string {
 
   return `# ${problem.title}
 
-## Description
-${problem.description}
-
-## Requirements
-${problem.requirements.map(r => `- ${r}`).join("\n")}
+${problem.statement}
 
 ## Test Cases
 
@@ -70,9 +95,7 @@ ${SPEC}
 
 ## Problem
 Title: ${problem.title}
-Description: ${problem.description}
-Requirements:
-${problem.requirements.map(r => `- ${r}`).join("\n")}
+${problem.statement}
 
 ## Current Test Cases
 ${problem.testCases.map(t => `${t.name}:\n${t.steps.map(s => `  - ${s}`).join("\n")}`).join("\n\n")}
@@ -170,4 +193,66 @@ export async function generate(
   }
 
   return problem
+}
+
+function formatContext(ctx: WriterContext): string {
+  let content = ""
+
+  if (ctx.problem) {
+    content += `## Current Problem\n${formatProblem(ctx.problem)}\n`
+  }
+
+  if (ctx.files?.length) {
+    content += `## Files\n`
+    for (const file of ctx.files) {
+      content += `\n### ${file.label}\n\`\`\`\n${file.content}\n\`\`\`\n`
+    }
+  }
+
+  return content
+}
+
+function writerPrompt(prompt: string, ctx: WriterContext): string {
+  const context = formatContext(ctx)
+
+  return `You are a Minecraft redstone problem writer creating a coding challenge.
+
+You have access to the @ordo/engine library. Here is the full specification:
+
+${SPEC}
+${context}
+## Task
+${prompt}
+
+Be:
+- Complete: covers all required behavior
+- Unambiguous: only one valid interpretation
+- Implementation independent: describes what, not how
+- Succinct
+
+Use the output_problem tool to output the result.`
+}
+
+export async function write(
+  client: Anthropic,
+  prompt: string,
+  ctx: WriterContext = {}
+): Promise<Problem> {
+  const response = await streamWithThinking(client, {
+    model: "claude-opus-4-5-20251101",
+    max_tokens: 16000,
+    thinking: { type: "enabled", budget_tokens: 12000 },
+    messages: [{ role: "user", content: writerPrompt(prompt, ctx) }],
+    tools: [{
+      name: "output_problem",
+      description: "Output the problem specification",
+      input_schema: zodToJsonSchema(ProblemSchema) as Anthropic.Tool.InputSchema
+    }],
+    tool_choice: { type: "auto" }
+  }, ctx.problem ? "Problem Edit" : "Problem Generation")
+
+  const toolUse = response.content.find(b => b.type === "tool_use")
+  if (!toolUse || toolUse.type !== "tool_use") throw new Error("Expected tool use")
+
+  return ProblemSchema.parse(toolUse.input) as Problem
 }

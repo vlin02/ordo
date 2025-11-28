@@ -58,3 +58,8 @@ export const Z = new Vec(0, 0, 1)
 export const HORIZONTALS = [X, X.neg, Z, Z.neg]
 export const ALL_DIRECTIONS = [X, X.neg, Y, Y.neg, Z, Z.neg]
 
+export const DIAGONALS_Y = [
+  new Vec(1, -1, 0), new Vec(-1, -1, 0), new Vec(0, -1, 1), new Vec(0, -1, -1),
+  new Vec(1, 1, 0), new Vec(-1, 1, 0), new Vec(0, 1, 1), new Vec(0, 1, -1),
+]
+
