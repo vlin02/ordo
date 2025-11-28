@@ -311,6 +311,8 @@ export { PressurePlate, type PressurePlateVariant } from "./blocks/pressure-plat
 export { Comparator, type ComparatorMode } from "./blocks/comparator.js"
 
 export { Vec, X, Y, Z, HORIZONTALS, ALL_DIRECTIONS, type VecObj } from "./vec.js"
+export { PowerGraph, type PowerNode, type PowerEdge, type PowerEdgeType } from "./power-graph.js"
+export { renderSlice, blockSymbol, blockDetails, type SliceAxis } from "./slice.js"
 
 export type Block =
   | Solid

@@ -14,6 +14,8 @@ import { Comparator, shouldComparatorDrop } from "./blocks/comparator.js"
 import type { Block } from "./blocks/index.js"
 import { type Snapshot, serializeBlock, deserializeBlock } from "./snapshot.js"
 import type { EngineEvent } from "./events.js"
+import { PowerGraph, describeBlockState, type PowerNode, type PowerEdge } from "./power-graph.js"
+import { renderSlice, type SliceAxis } from "./slice.js"
 
 export type EventHandler = (event: EngineEvent) => void
 
@@ -31,229 +33,107 @@ export class Engine {
     this.scheduledEvents = new Map()
   }
 
-  private emit(event: EngineEvent): void {
-    this.onEvent?.(event)
+  // ============ USER API ============
+
+  placeBlock(block: Block): void {
+    const existing = this.getBlock(block.pos)
+    if (existing) {
+      throw new Error(`Cannot place block: position ${block.pos} already occupied by ${existing.type}`)
+    }
+
+    const supportError = this.validateBlockSupport(block)
+    if (supportError) {
+      throw new Error(`Cannot place ${block.type}: ${supportError}`)
+    }
+
+    this.setBlock(block.pos, block)
+    this.triggerBlockUpdate(block.pos)
+    this.processBlockUpdates()
   }
 
-  // ============ MUTATION METHODS ============
-
-  // --- Structural ---
-  onBlockPlaced(block: Block): void {
-    this.grid.set(block.pos.toKey(), block)
-    this.emit({ type: "structural.block_placed", block })
+  removeBlock(block: Block): void {
+    this.setBlock(block.pos, null)
+    this.triggerBlockUpdate(block.pos)
+    this.processBlockUpdates()
   }
 
-  onBlockRemoved(pos: Vec): void {
-    this.grid.delete(pos.toKey())
-    this.emit({ type: "structural.block_removed", pos })
+  interact(block: Lever | Dust | Repeater | Button | Comparator): void {
+    if (block.type === "lever") {
+      this.onLeverToggled(block)
+      this.notifyObserversAt(block.pos)
+      this.triggerBlockUpdate(block.pos)
+    } else if (block.type === "dust") {
+      const newShape = block.shape === "cross" ? "dot" : "cross"
+      this.onDustShapeChanged(block, newShape)
+      this.notifyObserversAt(block.pos)
+      this.triggerBlockUpdate(block.pos)
+    } else if (block.type === "repeater") {
+      const delays = [2, 4, 6, 8]
+      const currentIndex = delays.indexOf(block.delay)
+      const newDelay = delays[(currentIndex + 1) % delays.length]
+      this.onRepeaterDelayChanged(block, newDelay)
+      this.notifyObserversAt(block.pos)
+    } else if (block.type === "button") {
+      if (block.pressed) {
+        throw new Error(`Cannot interact: button at ${block.pos} is already pressed`)
+      }
+      const duration = block.variant === "wood" ? 30 : 20
+      const releaseTick = this.tickCounter + duration
+      this.onButtonPressed(block, releaseTick)
+      this.scheduleEvent(releaseTick, block.pos)
+      this.triggerBlockUpdate(block.pos)
+    } else if (block.type === "comparator") {
+      const newMode = block.mode === "comparison" ? "subtraction" : "comparison"
+      this.onComparatorModeChanged(block, newMode)
+      this.notifyObserversAt(block.pos)
+      this.triggerBlockUpdate(block.pos)
+    }
+
+    this.processBlockUpdates()
   }
 
-  onBlockMoved(block: Block, from: Vec, to: Vec): void {
-    this.grid.delete(from.toKey())
-    ;(block as { pos: Vec }).pos = to
-    this.grid.set(to.toKey(), block)
-    this.emit({ type: "structural.block_moved", block, from, to })
+  setEntityCount(plate: PressurePlate, counts: { all: number; mobs: number }): void {
+    const wasActive = plate.active
+    const newCount = plate.variant === "stone" ? counts.mobs : counts.all
+    this.onPlateEntitiesChanged(plate, newCount)
+
+    if (plate.entityCount > 0 && !wasActive) {
+      const checkTick = this.tickCounter + 20
+      this.onPlateActivated(plate, checkTick)
+      this.notifyObserversAt(plate.pos)
+      this.triggerBlockUpdate(plate.pos)
+      this.scheduleEvent(checkTick, plate.pos)
+    }
+
+    this.processBlockUpdates()
   }
 
-  // --- Lever ---
-  onLeverToggled(lever: Lever): void {
-    lever.on = !lever.on
-    this.emit({ type: "lever.toggled", block: lever, on: lever.on })
+  tick(): void {
+    this.onTick()
+
+    const positions = this.scheduledEvents.get(this.tickCounter)
+    if (positions) {
+      for (const key of positions) {
+        this.updateQueue.add(key)
+      }
+      this.scheduledEvents.delete(this.tickCounter)
+    }
+
+    this.processBlockUpdates()
   }
 
-  // --- Button ---
-  onButtonPressed(button: Button, releaseTick: number): void {
-    button.pressed = true
-    button.scheduledRelease = releaseTick
-    this.emit({ type: "button.pressed", block: button, releaseTick })
+  // ============ QUERIES ============
+
+  getBlock(pos: Vec): Block | null {
+    return this.grid.get(pos.toKey()) ?? null
   }
 
-  onButtonReleased(button: Button): void {
-    button.pressed = false
-    button.scheduledRelease = null
-    this.emit({ type: "button.released", block: button })
+  getAllBlocks(): Block[] {
+    return Array.from(this.grid.values())
   }
 
-  // --- Pressure Plate ---
-  onPlateEntitiesChanged(plate: PressurePlate, count: number): void {
-    plate.entityCount = count
-    this.emit({ type: "plate.entities_changed", block: plate, count })
-  }
-
-  onPlateActivated(plate: PressurePlate, checkTick: number): void {
-    plate.active = true
-    plate.scheduledDeactivationCheck = checkTick
-    this.emit({ type: "plate.activated", block: plate, checkTick })
-  }
-
-  onPlateDeactivated(plate: PressurePlate): void {
-    plate.active = false
-    plate.scheduledDeactivationCheck = null
-    this.emit({ type: "plate.deactivated", block: plate })
-  }
-
-  onPlateCheckRescheduled(plate: PressurePlate, checkTick: number): void {
-    plate.scheduledDeactivationCheck = checkTick
-    this.emit({ type: "plate.check_rescheduled", block: plate, checkTick })
-  }
-
-  // --- Dust ---
-  onDustSignalChanged(dust: Dust, signal: number): void {
-    dust.signalStrength = signal
-    this.emit({ type: "dust.signal_changed", block: dust, signal })
-  }
-
-  onDustShapeChanged(dust: Dust, shape: "cross" | "dot"): void {
-    dust.shape = shape
-    this.emit({ type: "dust.shape_changed", block: dust, shape })
-  }
-
-  // --- Solid/Slime ---
-  onPowerStateChanged(block: Solid | Slime, state: PowerState): void {
-    block.powerState = state
-    this.emit({ type: "solid.power_state_changed", block, state })
-  }
-
-  // --- Repeater ---
-  onRepeaterDelayChanged(repeater: Repeater, delay: number): void {
-    repeater.delay = delay
-    this.emit({ type: "repeater.delay_changed", block: repeater, delay })
-  }
-
-  onRepeaterInputChanged(repeater: Repeater, powered: boolean, locked: boolean): void {
-    repeater.powered = powered
-    repeater.locked = locked
-    this.emit({ type: "repeater.input_changed", block: repeater, powered, locked })
-  }
-
-  onRepeaterOutputScheduled(repeater: Repeater, tick: number, state: boolean): void {
-    repeater.scheduledOutputChange = tick
-    repeater.scheduledOutputState = state
-    this.emit({ type: "repeater.output_scheduled", block: repeater, tick, state })
-  }
-
-  onRepeaterOutputChanged(repeater: Repeater, on: boolean): void {
-    repeater.outputOn = on
-    repeater.scheduledOutputChange = null
-    repeater.scheduledOutputState = null
-    this.emit({ type: "repeater.output_changed", block: repeater, on })
-  }
-
-  onRepeaterScheduleCancelled(repeater: Repeater): void {
-    repeater.scheduledOutputChange = null
-    repeater.scheduledOutputState = null
-    this.emit({ type: "repeater.schedule_cancelled", block: repeater })
-  }
-
-  // --- Comparator ---
-  onComparatorModeChanged(comparator: Comparator, mode: "comparison" | "subtraction"): void {
-    comparator.mode = mode
-    this.emit({ type: "comparator.mode_changed", block: comparator, mode })
-  }
-
-  onComparatorInputsChanged(
-    comparator: Comparator,
-    rear: number,
-    left: number,
-    right: number
-  ): void {
-    comparator.rearSignal = rear
-    comparator.leftSignal = left
-    comparator.rightSignal = right
-    this.emit({ type: "comparator.inputs_changed", block: comparator, rear, left, right })
-  }
-
-  onComparatorOutputScheduled(comparator: Comparator, tick: number, signal: number): void {
-    comparator.scheduledOutputChange = tick
-    comparator.scheduledOutputSignal = signal
-    this.emit({ type: "comparator.output_scheduled", block: comparator, tick, signal })
-  }
-
-  onComparatorOutputChanged(comparator: Comparator, signal: number): void {
-    comparator.outputSignal = signal
-    comparator.scheduledOutputChange = null
-    comparator.scheduledOutputSignal = null
-    this.emit({ type: "comparator.output_changed", block: comparator, signal })
-  }
-
-  // --- Torch ---
-  onTorchScheduled(torch: Torch, tick: number): void {
-    torch.scheduledStateChange = tick
-    this.emit({ type: "torch.scheduled", block: torch, tick })
-  }
-
-  onTorchStateChanged(torch: Torch, lit: boolean, stateChangeTimes: number[]): void {
-    torch.lit = lit
-    torch.stateChangeTimes = stateChangeTimes
-    torch.scheduledStateChange = null
-    this.emit({
-      type: "torch.state_changed",
-      block: torch,
-      lit,
-      stateChangeTimes: [...stateChangeTimes],
-    })
-  }
-
-  onTorchBurnout(torch: Torch, stateChangeTimes: number[]): void {
-    torch.lit = false
-    torch.burnedOut = true
-    torch.stateChangeTimes = stateChangeTimes
-    this.emit({ type: "torch.burnout", block: torch, stateChangeTimes: [...stateChangeTimes] })
-  }
-
-  // --- Piston ---
-  onPistonScheduled(piston: Piston | StickyPiston, tick: number): void {
-    piston.activationTick = tick
-    piston.shortPulse = false
-    this.emit({ type: "piston.scheduled", block: piston, tick })
-  }
-
-  onPistonExtended(piston: Piston | StickyPiston): void {
-    piston.extended = true
-    piston.activationTick = null
-    this.emit({ type: "piston.extended", block: piston })
-  }
-
-  onPistonRetracted(piston: Piston | StickyPiston): void {
-    piston.extended = false
-    piston.activationTick = null
-    piston.shortPulse = false
-    this.emit({ type: "piston.retracted", block: piston })
-  }
-
-  onPistonAborted(piston: Piston | StickyPiston): void {
-    piston.activationTick = null
-    this.emit({ type: "piston.aborted", block: piston })
-  }
-
-  onPistonShortPulse(piston: Piston | StickyPiston): void {
-    piston.shortPulse = true
-    this.emit({ type: "piston.short_pulse", block: piston })
-  }
-
-  // --- Observer ---
-  onObserverPulseScheduled(observer: Observer, startTick: number, endTick: number): void {
-    observer.scheduledPulseStart = startTick
-    observer.scheduledPulseEnd = endTick
-    this.emit({ type: "observer.pulse_scheduled", block: observer, startTick, endTick })
-  }
-
-  onObserverPulseStarted(observer: Observer): void {
-    observer.outputOn = true
-    observer.scheduledPulseStart = null
-    this.emit({ type: "observer.pulse_started", block: observer })
-  }
-
-  onObserverPulseEnded(observer: Observer): void {
-    observer.outputOn = false
-    observer.scheduledPulseEnd = null
-    this.emit({ type: "observer.pulse_ended", block: observer })
-  }
-
-  // --- Meta ---
-  onTick(): void {
-    this.tickCounter++
-    this.emit({ type: "meta.tick", tick: this.tickCounter })
+  getCurrentTick(): number {
+    return this.tickCounter
   }
 
   toSnapshot(): Snapshot {
@@ -290,19 +170,275 @@ export class Engine {
     return engine
   }
 
-  tick(): void {
-    this.onTick()
-
-    const positions = this.scheduledEvents.get(this.tickCounter)
-    if (positions) {
-      for (const key of positions) {
-        this.updateQueue.add(key)
+  private validateBlockSupport(block: Block): string | null {
+    switch (block.type) {
+      case "dust": {
+        const below = this.getBlock(block.pos.add(Y.neg))
+        if (!isDustSupported(below)) {
+          return `needs solid/slime/piston/observer support below at ${block.pos.add(Y.neg)}`
+        }
+        break
       }
-      this.scheduledEvents.delete(this.tickCounter)
+      case "lever": {
+        const attached = this.getBlock(block.attachedPos)
+        if (shouldLeverDrop(attached)) {
+          return `needs solid/piston attachment at ${block.attachedPos}`
+        }
+        break
+      }
+      case "button": {
+        const attached = this.getBlock(block.attachedPos)
+        if (shouldButtonDrop(attached)) {
+          return `needs solid block attachment at ${block.attachedPos}`
+        }
+        break
+      }
+      case "torch": {
+        const attached = this.getBlock(block.attachedPos)
+        if (shouldTorchDrop(attached, block.attachedFace)) {
+          return `needs valid attachment at ${block.attachedPos}`
+        }
+        break
+      }
+      case "repeater": {
+        const below = this.getBlock(block.pos.add(Y.neg))
+        if (shouldRepeaterDrop(below)) {
+          return `needs solid/slime block below at ${block.pos.add(Y.neg)}`
+        }
+        break
+      }
+      case "comparator": {
+        const below = this.getBlock(block.pos.add(Y.neg))
+        if (shouldComparatorDrop(below)) {
+          return `needs solid/slime block below at ${block.pos.add(Y.neg)}`
+        }
+        break
+      }
+      case "pressure-plate": {
+        const below = this.getBlock(block.pos.add(Y.neg))
+        if (shouldPressurePlateDrop(below)) {
+          return `needs solid block below at ${block.pos.add(Y.neg)}`
+        }
+        break
+      }
     }
-
-    this.processBlockUpdates()
+    return null
   }
+
+  // ============ EVENT PRIMITIVES (internal, but public for event system) ============
+
+  private emit(event: EngineEvent): void {
+    this.onEvent?.(event)
+  }
+
+  onBlockPlaced(block: Block): void {
+    this.grid.set(block.pos.toKey(), block)
+    this.emit({ type: "structural.block_placed", block })
+  }
+
+  onBlockRemoved(pos: Vec): void {
+    this.grid.delete(pos.toKey())
+    this.emit({ type: "structural.block_removed", pos })
+  }
+
+  onBlockMoved(block: Block, from: Vec, to: Vec): void {
+    this.grid.delete(from.toKey())
+    ;(block as { pos: Vec }).pos = to
+    this.grid.set(to.toKey(), block)
+    this.emit({ type: "structural.block_moved", block, from, to })
+  }
+
+  onLeverToggled(lever: Lever): void {
+    lever.on = !lever.on
+    this.emit({ type: "lever.toggled", block: lever, on: lever.on })
+  }
+
+  onButtonPressed(button: Button, releaseTick: number): void {
+    button.pressed = true
+    button.scheduledRelease = releaseTick
+    this.emit({ type: "button.pressed", block: button, releaseTick })
+  }
+
+  onButtonReleased(button: Button): void {
+    button.pressed = false
+    button.scheduledRelease = null
+    this.emit({ type: "button.released", block: button })
+  }
+
+  onPlateEntitiesChanged(plate: PressurePlate, count: number): void {
+    plate.entityCount = count
+    this.emit({ type: "plate.entities_changed", block: plate, count })
+  }
+
+  onPlateActivated(plate: PressurePlate, checkTick: number): void {
+    plate.active = true
+    plate.scheduledDeactivationCheck = checkTick
+    this.emit({ type: "plate.activated", block: plate, checkTick })
+  }
+
+  onPlateDeactivated(plate: PressurePlate): void {
+    plate.active = false
+    plate.scheduledDeactivationCheck = null
+    this.emit({ type: "plate.deactivated", block: plate })
+  }
+
+  onPlateCheckRescheduled(plate: PressurePlate, checkTick: number): void {
+    plate.scheduledDeactivationCheck = checkTick
+    this.emit({ type: "plate.check_rescheduled", block: plate, checkTick })
+  }
+
+  onDustSignalChanged(dust: Dust, signal: number): void {
+    dust.signalStrength = signal
+    this.emit({ type: "dust.signal_changed", block: dust, signal })
+  }
+
+  onDustShapeChanged(dust: Dust, shape: "cross" | "dot"): void {
+    dust.shape = shape
+    this.emit({ type: "dust.shape_changed", block: dust, shape })
+  }
+
+  onPowerStateChanged(block: Solid | Slime, state: PowerState): void {
+    block.powerState = state
+    this.emit({ type: "solid.power_state_changed", block, state })
+  }
+
+  onRepeaterDelayChanged(repeater: Repeater, delay: number): void {
+    repeater.delay = delay
+    this.emit({ type: "repeater.delay_changed", block: repeater, delay })
+  }
+
+  onRepeaterInputChanged(repeater: Repeater, powered: boolean, locked: boolean): void {
+    repeater.powered = powered
+    repeater.locked = locked
+    this.emit({ type: "repeater.input_changed", block: repeater, powered, locked })
+  }
+
+  onRepeaterOutputScheduled(repeater: Repeater, tick: number, state: boolean): void {
+    repeater.scheduledOutputChange = tick
+    repeater.scheduledOutputState = state
+    this.emit({ type: "repeater.output_scheduled", block: repeater, tick, state })
+  }
+
+  onRepeaterOutputChanged(repeater: Repeater, on: boolean): void {
+    repeater.outputOn = on
+    repeater.scheduledOutputChange = null
+    repeater.scheduledOutputState = null
+    this.emit({ type: "repeater.output_changed", block: repeater, on })
+  }
+
+  onRepeaterScheduleCancelled(repeater: Repeater): void {
+    repeater.scheduledOutputChange = null
+    repeater.scheduledOutputState = null
+    this.emit({ type: "repeater.schedule_cancelled", block: repeater })
+  }
+
+  onComparatorModeChanged(comparator: Comparator, mode: "comparison" | "subtraction"): void {
+    comparator.mode = mode
+    this.emit({ type: "comparator.mode_changed", block: comparator, mode })
+  }
+
+  onComparatorInputsChanged(
+    comparator: Comparator,
+    rear: number,
+    left: number,
+    right: number
+  ): void {
+    comparator.rearSignal = rear
+    comparator.leftSignal = left
+    comparator.rightSignal = right
+    this.emit({ type: "comparator.inputs_changed", block: comparator, rear, left, right })
+  }
+
+  onComparatorOutputScheduled(comparator: Comparator, tick: number, signal: number): void {
+    comparator.scheduledOutputChange = tick
+    comparator.scheduledOutputSignal = signal
+    this.emit({ type: "comparator.output_scheduled", block: comparator, tick, signal })
+  }
+
+  onComparatorOutputChanged(comparator: Comparator, signal: number): void {
+    comparator.outputSignal = signal
+    comparator.scheduledOutputChange = null
+    comparator.scheduledOutputSignal = null
+    this.emit({ type: "comparator.output_changed", block: comparator, signal })
+  }
+
+  onTorchScheduled(torch: Torch, tick: number): void {
+    torch.scheduledStateChange = tick
+    this.emit({ type: "torch.scheduled", block: torch, tick })
+  }
+
+  onTorchStateChanged(torch: Torch, lit: boolean, stateChangeTimes: number[]): void {
+    torch.lit = lit
+    torch.stateChangeTimes = stateChangeTimes
+    torch.scheduledStateChange = null
+    this.emit({
+      type: "torch.state_changed",
+      block: torch,
+      lit,
+      stateChangeTimes: [...stateChangeTimes],
+    })
+  }
+
+  onTorchBurnout(torch: Torch, stateChangeTimes: number[]): void {
+    torch.lit = false
+    torch.burnedOut = true
+    torch.stateChangeTimes = stateChangeTimes
+    this.emit({ type: "torch.burnout", block: torch, stateChangeTimes: [...stateChangeTimes] })
+  }
+
+  onPistonScheduled(piston: Piston | StickyPiston, tick: number): void {
+    piston.activationTick = tick
+    piston.shortPulse = false
+    this.emit({ type: "piston.scheduled", block: piston, tick })
+  }
+
+  onPistonExtended(piston: Piston | StickyPiston): void {
+    piston.extended = true
+    piston.activationTick = null
+    this.emit({ type: "piston.extended", block: piston })
+  }
+
+  onPistonRetracted(piston: Piston | StickyPiston): void {
+    piston.extended = false
+    piston.activationTick = null
+    piston.shortPulse = false
+    this.emit({ type: "piston.retracted", block: piston })
+  }
+
+  onPistonAborted(piston: Piston | StickyPiston): void {
+    piston.activationTick = null
+    this.emit({ type: "piston.aborted", block: piston })
+  }
+
+  onPistonShortPulse(piston: Piston | StickyPiston): void {
+    piston.shortPulse = true
+    this.emit({ type: "piston.short_pulse", block: piston })
+  }
+
+  onObserverPulseScheduled(observer: Observer, startTick: number, endTick: number): void {
+    observer.scheduledPulseStart = startTick
+    observer.scheduledPulseEnd = endTick
+    this.emit({ type: "observer.pulse_scheduled", block: observer, startTick, endTick })
+  }
+
+  onObserverPulseStarted(observer: Observer): void {
+    observer.outputOn = true
+    observer.scheduledPulseStart = null
+    this.emit({ type: "observer.pulse_started", block: observer })
+  }
+
+  onObserverPulseEnded(observer: Observer): void {
+    observer.outputOn = false
+    observer.scheduledPulseEnd = null
+    this.emit({ type: "observer.pulse_ended", block: observer })
+  }
+
+  onTick(): void {
+    this.tickCounter++
+    this.emit({ type: "meta.tick", tick: this.tickCounter })
+  }
+
+  // ============ PRIVATE ============
 
   private scheduleEvent(tick: number, pos: Vec): void {
     const key = pos.toKey()
@@ -310,82 +446,6 @@ export class Engine {
       this.scheduledEvents.set(tick, new Set())
     }
     this.scheduledEvents.get(tick)!.add(key)
-  }
-
-  placeBlock(block: Block): void {
-    this.setBlock(block.pos, block)
-    this.triggerBlockUpdate(block.pos)
-    this.processBlockUpdates()
-  }
-
-  removeBlock(pos: Vec): void {
-    this.setBlock(pos, null)
-    this.triggerBlockUpdate(pos)
-    this.processBlockUpdates()
-  }
-
-  interact(pos: Vec): void {
-    const block = this.getBlock(pos)
-    if (!block) return
-
-    if (block.type === "lever") {
-      this.onLeverToggled(block)
-      this.notifyObserversAt(pos)
-      this.triggerBlockUpdate(pos)
-    } else if (block.type === "dust") {
-      const newShape = block.shape === "cross" ? "dot" : "cross"
-      this.onDustShapeChanged(block, newShape)
-      this.notifyObserversAt(pos)
-      this.triggerBlockUpdate(pos)
-    } else if (block.type === "repeater") {
-      const delays = [2, 4, 6, 8]
-      const currentIndex = delays.indexOf(block.delay)
-      const newDelay = delays[(currentIndex + 1) % delays.length]
-      this.onRepeaterDelayChanged(block, newDelay)
-      this.notifyObserversAt(pos)
-    } else if (block.type === "button") {
-      if (!block.pressed) {
-        const duration = block.variant === "wood" ? 30 : 20
-        const releaseTick = this.tickCounter + duration
-        this.onButtonPressed(block, releaseTick)
-        this.scheduleEvent(releaseTick, block.pos)
-        this.triggerBlockUpdate(pos)
-      }
-    } else if (block.type === "comparator") {
-      const newMode = block.mode === "comparison" ? "subtraction" : "comparison"
-      this.onComparatorModeChanged(block, newMode)
-      this.notifyObserversAt(pos)
-      this.triggerBlockUpdate(pos)
-    }
-
-    this.processBlockUpdates()
-  }
-
-  setEntityCount(pos: Vec, counts: { all: number; mobs: number }): void {
-    const block = this.getBlock(pos)
-    if (!block || block.type !== "pressure-plate") return
-
-    const wasActive = block.active
-    const newCount = block.variant === "stone" ? counts.mobs : counts.all
-    this.onPlateEntitiesChanged(block, newCount)
-
-    if (block.entityCount > 0 && !wasActive) {
-      const checkTick = this.tickCounter + 20
-      this.onPlateActivated(block, checkTick)
-      this.notifyObserversAt(pos)
-      this.triggerBlockUpdate(pos)
-      this.scheduleEvent(checkTick, pos)
-    }
-
-    this.processBlockUpdates()
-  }
-
-  getBlock(pos: Vec): Block | null {
-    return this.grid.get(pos.toKey()) ?? null
-  }
-
-  getAllBlocks(): Block[] {
-    return Array.from(this.grid.values())
   }
 
   private setBlock(pos: Vec, block: Block | null): void {
@@ -417,10 +477,6 @@ export class Engine {
     this.onObserverPulseScheduled(observer, startTick, endTick)
     this.scheduleEvent(startTick, observer.pos)
     this.scheduleEvent(endTick, observer.pos)
-  }
-
-  getCurrentTick(): number {
-    return this.tickCounter
   }
 
   private processBlockUpdates(): void {
@@ -1045,6 +1101,179 @@ export class Engine {
     return this.checkPistonActivationAt(piston, abovePos)
   }
 
+  getPowerGraph(): PowerGraph {
+    const nodes = new Map<string, PowerNode>()
+    const edges: PowerEdge[] = []
+
+    for (const block of this.getAllBlocks()) {
+      nodes.set(block.pos.toKey(), {
+        pos: block.pos,
+        block,
+        state: describeBlockState(block),
+      })
+    }
+
+    for (const block of this.getAllBlocks()) {
+      this.collectPowerEdges(block, edges)
+    }
+
+    return new PowerGraph(nodes, edges)
+  }
+
+  private collectPowerEdges(block: Block, edges: PowerEdge[]): void {
+    const pos = block.pos
+
+    switch (block.type) {
+      case "lever":
+        if (block.on) {
+          for (const adj of pos.adjacents()) {
+            edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+          }
+          const attached = this.getBlock(block.attachedPos)
+          if (attached?.type === "solid" || attached?.type === "slime") {
+            edges.push({ from: pos, to: block.attachedPos, type: "strong" })
+          }
+        }
+        break
+
+      case "button":
+        if (block.pressed) {
+          for (const adj of pos.adjacents()) {
+            edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+          }
+          const attached = this.getBlock(block.attachedPos)
+          if (attached?.type === "solid" || attached?.type === "slime") {
+            edges.push({ from: pos, to: block.attachedPos, type: "strong" })
+          }
+        }
+        break
+
+      case "pressure-plate":
+        if (block.active) {
+          const below = pos.add(Y.neg)
+          const belowBlock = this.getBlock(below)
+          if (belowBlock?.type === "solid" || belowBlock?.type === "slime") {
+            edges.push({ from: pos, to: below, type: "strong" })
+          }
+          for (const adj of pos.adjacents()) {
+            edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+          }
+        }
+        break
+
+      case "redstone-block":
+        for (const adj of pos.adjacents()) {
+          edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+        }
+        break
+
+      case "torch":
+        if (block.lit) {
+          for (const adj of pos.adjacents()) {
+            if (!adj.equals(block.attachedPos)) {
+              edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+            }
+          }
+          const above = pos.add(Y)
+          const aboveBlock = this.getBlock(above)
+          if (aboveBlock?.type === "solid" || aboveBlock?.type === "slime") {
+            edges.push({ from: pos, to: above, type: "strong" })
+          }
+        }
+        break
+
+      case "repeater":
+        if (block.outputOn) {
+          const front = pos.add(block.facing)
+          edges.push({ from: pos, to: front, type: "signal", signalStrength: 15 })
+          const frontBlock = this.getBlock(front)
+          if (frontBlock?.type === "solid" || frontBlock?.type === "slime") {
+            edges.push({ from: pos, to: front, type: "strong" })
+          }
+        }
+        break
+
+      case "comparator":
+        if (block.outputSignal > 0) {
+          const front = pos.add(block.facing)
+          edges.push({ from: pos, to: front, type: "signal", signalStrength: block.outputSignal })
+          const frontBlock = this.getBlock(front)
+          if (frontBlock?.type === "solid" || frontBlock?.type === "slime") {
+            edges.push({ from: pos, to: front, type: "strong" })
+          }
+        }
+        break
+
+      case "observer":
+        if (block.outputOn) {
+          const back = pos.add(block.facing.neg)
+          edges.push({ from: pos, to: back, type: "signal", signalStrength: 15 })
+          const backBlock = this.getBlock(back)
+          if (backBlock?.type === "solid" || backBlock?.type === "slime") {
+            edges.push({ from: pos, to: back, type: "strong" })
+          }
+        }
+        break
+
+      case "dust":
+        if (block.signalStrength > 0) {
+          const below = pos.add(Y.neg)
+          const belowBlock = this.getBlock(below)
+          if (belowBlock?.type === "solid" || belowBlock?.type === "slime") {
+            edges.push({ from: pos, to: below, type: "weak" })
+          }
+
+          if (block.shape !== "dot") {
+            const connections = this.findDustConnections(block)
+            for (const conn of connections) {
+              const connBlock = this.getBlock(conn)
+              if (connBlock?.type === "dust") {
+                edges.push({ from: pos, to: conn, type: "signal", signalStrength: block.signalStrength - 1 })
+              }
+            }
+
+            for (const dir of HORIZONTALS) {
+              const adj = pos.add(dir)
+              if (this.isDustPointingAt(block, adj)) {
+                const adjBlock = this.getBlock(adj)
+                if (adjBlock?.type === "solid" || adjBlock?.type === "slime") {
+                  edges.push({ from: pos, to: adj, type: "weak" })
+                }
+                if (adjBlock?.type === "piston" || adjBlock?.type === "sticky-piston") {
+                  edges.push({ from: pos, to: adj, type: "activation" })
+                }
+              }
+            }
+          }
+
+          if (belowBlock?.type === "piston" || belowBlock?.type === "sticky-piston") {
+            edges.push({ from: pos, to: below, type: "activation" })
+          }
+        }
+        break
+
+      case "solid":
+      case "slime":
+        if (block.powerState === "strongly-powered") {
+          for (const adj of pos.adjacents()) {
+            const adjBlock = this.getBlock(adj)
+            if (adjBlock?.type === "dust") {
+              edges.push({ from: pos, to: adj, type: "signal", signalStrength: 15 })
+            }
+          }
+        }
+        if (block.powerState !== "unpowered") {
+          for (const adj of pos.adjacents()) {
+            const adjBlock = this.getBlock(adj)
+            if (adjBlock?.type === "piston" || adjBlock?.type === "sticky-piston") {
+              edges.push({ from: pos, to: adj, type: "activation" })
+            }
+          }
+        }
+        break
+    }
+  }
+
   private checkPistonActivationAt(piston: Piston | StickyPiston, checkPos: Vec): boolean {
     const frontPos = piston.pos.add(piston.facing)
 
@@ -1286,5 +1515,11 @@ export class Engine {
       this.triggerBlockUpdate(pos)
       this.triggerBlockUpdate(pos.add(direction))
     }
+  }
+
+  // ============ VISUALIZATION ============
+
+  visualizeSlice(axis: SliceAxis, value: number): string {
+    return renderSlice([...this.grid.values()], axis, value)
   }
 }

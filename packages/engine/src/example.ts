@@ -20,7 +20,8 @@ console.log("  Tick:", engine.getCurrentTick())
 console.log("  Lever on:", engine.getBlock(new Vec(0, 0, 0))?.type === "lever" && (engine.getBlock(new Vec(0, 0, 0)) as any).on)
 
 // Turn on the lever
-engine.interact(new Vec(0, 0, 0))
+const lever = engine.getBlock(new Vec(0, 0, 0)) as Lever
+engine.interact(lever)
 console.log("\nAfter toggling lever:")
 console.log("  Lever on:", (engine.getBlock(new Vec(0, 0, 0)) as any).on)
 console.log("  Dust signal:", (engine.getBlock(new Vec(1, 0, 0)) as any).signalStrength)

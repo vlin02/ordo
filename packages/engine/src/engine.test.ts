@@ -68,7 +68,7 @@ describe("Redstone Engine - Happy Path", () => {
     expect(engine.getBlock(v(8, 0, 0))).not.toBe(null)
 
     // Turn on lever
-    engine.interact(lever.pos)
+    engine.interact(lever)
     expect(lever.on).toBe(true)
     expect(dust1.signalStrength).toBe(15)
     expect(repeater.powered).toBe(true)
@@ -87,7 +87,7 @@ describe("Redstone Engine - Happy Path", () => {
     expect(piston.extended).toBe(false)
 
     // Turn lever off
-    engine.interact(lever.pos)
+    engine.interact(lever)
     expect(lever.on).toBe(false)
     expect(dust1.signalStrength).toBe(0)
 
@@ -126,7 +126,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const dust3 = new Dust(v(4, 0, 0))
     engine.placeBlock(dust3)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
 
     expect(dust1.signalStrength).toBe(15)
     expect(dust2.signalStrength).toBe(14)
@@ -150,16 +150,16 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(0, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(piston.extended).toBe(true)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(piston.extended).toBe(false)
 
     engine.placeBlock(new Solid(v(2, 0, 0)))
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(piston.extended).toBe(false) // 13 > 12, fails
   })
@@ -177,7 +177,7 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(lever)
 
     expect(piston.extended).toBe(false)
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(piston.extended).toBe(true)
   })
@@ -204,13 +204,13 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(engine.getBlock(torch.pos)).toBe(torch)
     expect(engine.getBlock(lever.pos)).toBe(lever)
 
-    engine.removeBlock(base.pos)
+    engine.removeBlock(base)
     expect(engine.getBlock(dust.pos)).toBe(null)
     expect(engine.getBlock(torch.pos)).toBe(null)
     expect(engine.getBlock(lever.pos)).toBe(null)
     expect(engine.getBlock(repeater.pos)).toBe(repeater)
 
-    engine.removeBlock(base2.pos)
+    engine.removeBlock(base2)
     expect(engine.getBlock(repeater.pos)).toBe(null)
   })
 
@@ -235,13 +235,13 @@ describe("Redstone Engine - Edge Cases", () => {
     const mainLever = new Lever(v(1, 0, 0), X.neg, mainLeverBase.pos)
     engine.placeBlock(mainLever)
 
-    engine.interact(lockLever.pos)
+    engine.interact(lockLever)
     tickN(engine, 3)
 
     expect(lockingRepeater.outputOn).toBe(true)
     expect(mainRepeater.locked).toBe(true)
 
-    engine.interact(mainLever.pos)
+    engine.interact(mainLever)
     tickN(engine, 3)
 
     expect(mainRepeater.powered).toBe(true)
@@ -256,13 +256,13 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(repeater)
 
     expect(repeater.delay).toBe(2)
-    engine.interact(repeater.pos)
+    engine.interact(repeater)
     expect(repeater.delay).toBe(4)
-    engine.interact(repeater.pos)
+    engine.interact(repeater)
     expect(repeater.delay).toBe(6)
-    engine.interact(repeater.pos)
+    engine.interact(repeater)
     expect(repeater.delay).toBe(8)
-    engine.interact(repeater.pos)
+    engine.interact(repeater)
     expect(repeater.delay).toBe(2)
   })
 
@@ -274,9 +274,9 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(dust)
 
     expect(dust.shape).toBe("cross")
-    engine.interact(dust.pos)
+    engine.interact(dust)
     expect(dust.shape).toBe("dot")
-    engine.interact(dust.pos)
+    engine.interact(dust)
     expect(dust.shape).toBe("cross")
   })
 
@@ -297,7 +297,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(0, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(piston.extended).toBe(true)
@@ -319,14 +319,14 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(stickyPiston.extended).toBe(true)
     expect(engine.getBlock(v(2, 0, 0))).not.toBe(null)
     expect(engine.getBlock(v(1, 0, 0))).toBe(null)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(stickyPiston.extended).toBe(false)
@@ -378,7 +378,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(piston.extended).toBe(true)
@@ -396,7 +396,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever2 = new Lever(v(1, 0, 0), Y.neg, v(1, -1, 0))
     engine2.placeBlock(lever2)
 
-    engine2.interact(lever2.pos)
+    engine2.interact(lever2)
     tickN(engine2, 2)
     expect(obs2.outputOn).toBe(true)
   })
@@ -416,10 +416,10 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(0, 1, 1), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(dust.pos)
+    engine.interact(dust)
     expect(dust.shape).toBe("dot")
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     expect(dust.signalStrength).toBe(15)
     expect(adjacentSolid.powerState).toBe("unpowered")
   })
@@ -448,7 +448,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-2, 1, 0), Y.neg, v(-2, 0, 0))
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     expect(dust2.signalStrength).toBe(14)
 
     // Piston should NOT activate - dust2 only points E-W, not North
@@ -472,7 +472,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever2 = new Lever(v(1, 1, -1), Y.neg, lever2Base.pos)
     engine.placeBlock(lever2)
 
-    engine.interact(lever2.pos)
+    engine.interact(lever2)
     tickN(engine, 4)
     expect(piston2.extended).toBe(true)
 
@@ -481,7 +481,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever1 = new Lever(v(-1, 1, 0), Y.neg, lever1Base.pos)
     engine.placeBlock(lever1)
 
-    engine.interact(lever1.pos)
+    engine.interact(lever1)
     tickN(engine, 4)
     expect(piston1.extended).toBe(false)
   })
@@ -504,9 +504,9 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(lever)
 
     for (let i = 0; i < 9; i++) {
-      engine.interact(lever.pos)
+      engine.interact(lever)
       tickN(engine, 4)
-      engine.interact(lever.pos)
+      engine.interact(lever)
       tickN(engine, 4)
     }
 
@@ -521,7 +521,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const stoneButton = new Button(v(1, 0, 0), X.neg, stoneBase.pos, "stone")
     engine.placeBlock(stoneButton)
 
-    engine.interact(stoneButton.pos)
+    engine.interact(stoneButton)
     expect(stoneButton.pressed).toBe(true)
     expect(stoneBase.powerState).toBe("strongly-powered")
 
@@ -533,7 +533,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const woodButton = new Button(v(4, 0, 0), X.neg, woodBase.pos, "wood")
     engine.placeBlock(woodButton)
 
-    engine.interact(woodButton.pos)
+    engine.interact(woodButton)
     expect(woodButton.pressed).toBe(true)
 
     tickN(engine, 20)
@@ -558,13 +558,13 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(engine.getBlock(v(2, 0, 0))?.type).toBe("slime")
     expect(engine.getBlock(v(1, 0, 0))).toBe(null)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(engine.getBlock(v(1, 0, 0))?.type).toBe("slime")
 
@@ -584,7 +584,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lv = new Lever(v(-2, 1, 0), Y.neg, lb.pos)
     engine2.placeBlock(lv)
 
-    engine2.interact(lv.pos)
+    engine2.interact(lv)
     tickN(engine2, 6)
     expect(slime2.powerState).toBe("strongly-powered")
     expect(torch.lit).toBe(false)
@@ -609,7 +609,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
 
     expect(engine.getBlock(v(2, 0, 0))?.type).toBe("slime")
@@ -680,7 +680,7 @@ describe("Redstone Engine - Edge Cases", () => {
       const plate = new PressurePlate(v(i * 2, 1, 0), variant)
       engine.placeBlock(plate)
 
-      engine.setEntityCount(plate.pos, { all: entityCount, mobs: entityCount })
+      engine.setEntityCount(plate, { all: entityCount, mobs: entityCount })
       expect(plate.active).toBe(true)
       expect(plate.getOutputSignal()).toBe(expectedOutput)
       expect(base.powerState).toBe("strongly-powered")
@@ -701,7 +701,7 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(leverBase)
     const lever = new Lever(v(2, 3, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
-    engine.interact(lever.pos)
+    engine.interact(lever)
 
     expect(upperDust.signalStrength).toBe(15)
     expect(lowerDust.signalStrength).toBe(14)
@@ -720,7 +720,7 @@ describe("Redstone Engine - Edge Cases", () => {
     engine2.placeBlock(lb2)
     const lv2 = new Lever(v(2, 3, 0), Y.neg, lb2.pos)
     engine2.placeBlock(lv2)
-    engine2.interact(lv2.pos)
+    engine2.interact(lv2)
 
     expect(upper2.signalStrength).toBe(15)
     expect(lower2.signalStrength).toBe(0) // Blocked
@@ -738,7 +738,7 @@ describe("Redstone Engine - Edge Cases", () => {
     engine3.placeBlock(lb3)
     const lv3 = new Lever(v(-1, 3, 0), Y.neg, lb3.pos)
     engine3.placeBlock(lv3)
-    engine3.interact(lv3.pos)
+    engine3.interact(lv3)
 
     expect(upper3.signalStrength).toBe(15)
     expect(lower3.signalStrength).toBe(14)
@@ -772,8 +772,8 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
-    engine.interact(lever.pos) // Immediate off
+    engine.interact(lever)
+    engine.interact(lever) // Immediate off
     engine.tick()
 
     expect(stickyPiston.extended).toBe(false)
@@ -793,7 +793,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(-1, 1, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
     tickN(engine, 4)
     expect(piston.extended).toBe(true)
 
@@ -815,7 +815,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const button = new Button(v(-1, 1, 1), Z.neg, base.pos)
     engine.placeBlock(button)
 
-    engine.interact(button.pos)
+    engine.interact(button)
     expect(repeater.powered).toBe(true)
 
     tickN(engine, 4)
@@ -872,7 +872,7 @@ describe("Redstone Engine - Edge Cases", () => {
     const lever = new Lever(v(2, 3, 0), Y.neg, leverBase.pos)
     engine.placeBlock(lever)
 
-    engine.interact(lever.pos)
+    engine.interact(lever)
 
     expect(upperDust.signalStrength).toBe(15)
     expect(lowerDust.signalStrength).toBe(14) // Observer does NOT block upward
@@ -898,9 +898,9 @@ describe("Redstone Engine - Edge Cases", () => {
     engine.placeBlock(comp)
 
     expect(comp.mode).toBe("comparison")
-    engine.interact(comp.pos)
+    engine.interact(comp)
     expect(comp.mode).toBe("subtraction")
-    engine.interact(comp.pos)
+    engine.interact(comp)
     expect(comp.mode).toBe("comparison")
   })
 

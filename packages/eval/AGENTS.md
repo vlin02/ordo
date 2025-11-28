@@ -66,7 +66,7 @@ You have access to the `@ordo/engine` library. See `spec.md` for the normative s
 ## Task
 
 1. Read PROBLEM.md
-2. Implement `solution.ts`: `export function build(engine: Engine): void`
+2. Implement `solution.ts`: `export function build(engine: Engine)` (you may return anything)
 3. Write tests in `solution.test.ts`
 4. Run tests until they pass
 5. Create README.md with design notes
