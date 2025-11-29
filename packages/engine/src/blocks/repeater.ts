@@ -1,7 +1,9 @@
-import { Vec } from "../vec.js"
+import { Vec, Y } from "../vec.js"
+import type { World } from "../world.js"
 
 export class Repeater {
   readonly type = "repeater" as const
+  readonly world: World
   readonly pos: Vec
   readonly facing: Vec
   delay: number
@@ -11,7 +13,8 @@ export class Repeater {
   scheduledOutputChange: number | null
   scheduledOutputState: boolean | null
 
-  constructor(pos: Vec, facing: Vec) {
+  constructor(world: World, pos: Vec, facing: Vec) {
+    this.world = world
     this.pos = pos
     this.facing = facing
     this.delay = 2
@@ -55,13 +58,10 @@ export class Repeater {
 
     return { changed: true }
   }
-}
 
-import type { BlockType } from "./index.js"
-
-export type RepeaterSupportBlock = { type: BlockType } | null
-
-export function shouldRepeaterDrop(belowBlock: RepeaterSupportBlock): boolean {
-  if (!belowBlock) return true
-  return belowBlock.type !== "solid" && belowBlock.type !== "slime"
+  shouldDrop(): boolean {
+    const below = this.world.getBlock(this.pos.add(Y.neg))
+    if (!below) return true
+    return below.type !== "solid" && below.type !== "slime"
+  }
 }

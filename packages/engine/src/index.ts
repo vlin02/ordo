@@ -276,7 +276,6 @@ import type { Solid } from "./blocks/solid.js"
 import type { Lever } from "./blocks/lever.js"
 import type { Dust } from "./blocks/dust.js"
 import type { Piston } from "./blocks/piston.js"
-import type { StickyPiston } from "./blocks/sticky-piston.js"
 import type { Repeater } from "./blocks/repeater.js"
 import type { Torch } from "./blocks/torch.js"
 import type { Observer } from "./blocks/observer.js"
@@ -286,8 +285,8 @@ import type { RedstoneBlock } from "./blocks/redstone-block.js"
 import type { PressurePlate } from "./blocks/pressure-plate.js"
 import type { Comparator } from "./blocks/comparator.js"
 
-export { Engine, type EventHandler } from "./engine.js"
-export { type EngineEvent } from "./events.js"
+export { World } from "./world.js"
+export { Player, type Direction } from "./player.js"
 export {
   type Snapshot,
   type BlockState,
@@ -300,7 +299,7 @@ export { Solid, type PowerState } from "./blocks/solid.js"
 export { Lever } from "./blocks/lever.js"
 export { Dust, type DustShape } from "./blocks/dust.js"
 export { Piston } from "./blocks/piston.js"
-export { StickyPiston } from "./blocks/sticky-piston.js"
+export type { Piston as StickyPiston } from "./blocks/piston.js"
 export { Repeater } from "./blocks/repeater.js"
 export { Torch } from "./blocks/torch.js"
 export { Observer } from "./blocks/observer.js"
@@ -311,25 +310,22 @@ export { PressurePlate, type PressurePlateVariant } from "./blocks/pressure-plat
 export { Comparator, type ComparatorMode } from "./blocks/comparator.js"
 
 export { Vec, X, Y, Z, HORIZONTALS, ALL_DIRECTIONS, type VecObj } from "./vec.js"
-export { PowerGraph, type PowerNode, type PowerEdge, type PowerEdgeType } from "./power-graph.js"
-export { renderSlice, blockSymbol, blockDetails, type SliceAxis } from "./slice.js"
+export { Circuit, trace, type Node, type Edge, type EdgeType } from "./kit/circuit.js"
+export { Slice, blockSymbol, parseSymbol, PATTERNS, type ParsedSymbol } from "./kit/grid.js"
 export {
-  buildContraption,
+  Assembler,
   B,
-  type Direction,
   type BlockDef,
-  type Cell,
-  type Slice,
-  type Contraption,
-  type BuildResult,
-} from "./builder.js"
+  type Schematic,
+  type ApplyResult,
+} from "./kit/assembler.js"
+export { Agent } from "./kit/agent.js"
 
 export type Block =
   | Solid
   | Lever
   | Dust
   | Piston
-  | StickyPiston
   | Repeater
   | Torch
   | Observer

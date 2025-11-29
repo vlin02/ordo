@@ -1,14 +1,17 @@
 import { Vec } from "../vec.js"
+import type { World } from "../world.js"
 
 export class Observer {
   readonly type = "observer" as const
+  readonly world: World
   pos: Vec
   readonly facing: Vec
   outputOn: boolean
   scheduledPulseStart: number | null
   scheduledPulseEnd: number | null
 
-  constructor(pos: Vec, facing: Vec) {
+  constructor(world: World, pos: Vec, facing: Vec) {
+    this.world = world
     this.pos = pos
     this.facing = facing
     this.outputOn = false

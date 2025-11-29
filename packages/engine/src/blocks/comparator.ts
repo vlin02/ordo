@@ -1,10 +1,11 @@
-import { Vec } from "../vec.js"
-import type { BlockType } from "./index.js"
+import { Vec, Y } from "../vec.js"
+import type { World } from "../world.js"
 
 export type ComparatorMode = "comparison" | "subtraction"
 
 export class Comparator {
   readonly type = "comparator" as const
+  readonly world: World
   readonly pos: Vec
   readonly facing: Vec
   mode: ComparatorMode
@@ -15,7 +16,8 @@ export class Comparator {
   scheduledOutputChange: number | null
   scheduledOutputSignal: number | null
 
-  constructor(pos: Vec, facing: Vec, mode: ComparatorMode = "comparison") {
+  constructor(world: World, pos: Vec, facing: Vec, mode: ComparatorMode = "comparison") {
+    this.world = world
     this.pos = pos
     this.facing = facing
     this.mode = mode
@@ -54,9 +56,11 @@ export class Comparator {
     this.scheduledOutputSignal = null
     return true
   }
-}
 
-export function shouldComparatorDrop(supportBlock: { type: BlockType } | null): boolean {
-  if (!supportBlock) return true
-  return supportBlock.type !== "solid" && supportBlock.type !== "slime"
+  shouldDrop(): boolean {
+    const below = this.world.getBlock(this.pos.add(Y.neg))
+    if (!below) return true
+    return below.type !== "solid" && below.type !== "slime"
+  }
 }
+ 

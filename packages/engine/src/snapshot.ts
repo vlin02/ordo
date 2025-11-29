@@ -1,10 +1,10 @@
 import { Vec, type VecObj } from "./vec.js"
+import type { World } from "./world.js"
 import { Solid, type PowerState } from "./blocks/solid.js"
 import { Slime } from "./blocks/slime.js"
 import { Lever } from "./blocks/lever.js"
 import { Dust } from "./blocks/dust.js"
 import { Piston } from "./blocks/piston.js"
-import { StickyPiston } from "./blocks/sticky-piston.js"
 import { Repeater } from "./blocks/repeater.js"
 import { Torch } from "./blocks/torch.js"
 import { Observer } from "./blocks/observer.js"
@@ -28,7 +28,7 @@ export type BlockState =
   | { type: "observer"; pos: VecObj; facing: VecObj; outputOn: boolean; scheduledPulseStart: number | null; scheduledPulseEnd: number | null }
   | { type: "button"; pos: VecObj; attachedFace: VecObj; variant: "stone" | "wood"; pressed: boolean; scheduledRelease: number | null }
   | { type: "redstone-block"; pos: VecObj }
-  | { type: "pressure-plate"; pos: VecObj; variant: "wood" | "stone" | "light_weighted" | "heavy_weighted"; entityCount: number; active: boolean; scheduledDeactivationCheck: number | null }
+  | { type: "pressure-plate"; pos: VecObj; variant: "wood" | "stone" | "light-weighted" | "heavy-weighted"; entityCount: number; active: boolean; scheduledDeactivationCheck: number | null }
   | { type: "comparator"; pos: VecObj; facing: VecObj; mode: "comparison" | "subtraction"; rearSignal: number; leftSignal: number; rightSignal: number; outputSignal: number; scheduledOutputChange: number | null; scheduledOutputSignal: number | null }
 
 export type Snapshot = {
@@ -94,49 +94,49 @@ export function serializeBlock(block: Block): BlockState {
   }
 }
 
-export function deserializeBlock(state: BlockState): Block {
+export function deserializeBlock(world: World, state: BlockState): Block {
   const pos = Vec.fromJSON(state.pos)
 
   switch (state.type) {
     case "solid": {
-      const block = new Solid(pos)
+      const block = new Solid(world, pos)
       block.powerState = state.powerState
       return block
     }
     case "slime": {
-      const block = new Slime(pos)
+      const block = new Slime(world, pos)
       block.powerState = state.powerState
       return block
     }
     case "lever": {
       const attachedFace = Vec.fromJSON(state.attachedFace)
       const attachedPos = pos.add(attachedFace)
-      const block = new Lever(pos, attachedFace, attachedPos)
+      const block = new Lever(world, pos, attachedFace, attachedPos)
       block.on = state.on
       return block
     }
     case "dust": {
-      const block = new Dust(pos)
+      const block = new Dust(world, pos)
       block.signalStrength = state.signalStrength
       block.shape = state.shape
       return block
     }
     case "piston": {
-      const block = new Piston(pos, Vec.fromJSON(state.facing))
+      const block = new Piston(world, pos, Vec.fromJSON(state.facing))
       block.extended = state.extended
       block.activationTick = state.activationTick
       block.shortPulse = state.shortPulse
       return block
     }
     case "sticky-piston": {
-      const block = new StickyPiston(pos, Vec.fromJSON(state.facing))
+      const block = new Piston(world, pos, Vec.fromJSON(state.facing), true)
       block.extended = state.extended
       block.activationTick = state.activationTick
       block.shortPulse = state.shortPulse
       return block
     }
     case "repeater": {
-      const block = new Repeater(pos, Vec.fromJSON(state.facing))
+      const block = new Repeater(world, pos, Vec.fromJSON(state.facing))
       block.delay = state.delay
       block.powered = state.powered
       block.locked = state.locked
@@ -148,7 +148,7 @@ export function deserializeBlock(state: BlockState): Block {
     case "torch": {
       const attachedFace = Vec.fromJSON(state.attachedFace)
       const attachedPos = pos.add(attachedFace)
-      const block = new Torch(pos, attachedFace, attachedPos)
+      const block = new Torch(world, pos, attachedFace, attachedPos)
       block.lit = state.lit
       block.scheduledStateChange = state.scheduledStateChange
       block.stateChangeTimes = state.stateChangeTimes
@@ -156,7 +156,7 @@ export function deserializeBlock(state: BlockState): Block {
       return block
     }
     case "observer": {
-      const block = new Observer(pos, Vec.fromJSON(state.facing))
+      const block = new Observer(world, pos, Vec.fromJSON(state.facing))
       block.outputOn = state.outputOn
       block.scheduledPulseStart = state.scheduledPulseStart
       block.scheduledPulseEnd = state.scheduledPulseEnd
@@ -165,22 +165,22 @@ export function deserializeBlock(state: BlockState): Block {
     case "button": {
       const attachedFace = Vec.fromJSON(state.attachedFace)
       const attachedPos = pos.add(attachedFace)
-      const block = new Button(pos, attachedFace, attachedPos, state.variant)
+      const block = new Button(world, pos, attachedFace, attachedPos, state.variant)
       block.pressed = state.pressed
       block.scheduledRelease = state.scheduledRelease
       return block
     }
     case "redstone-block":
-      return new RedstoneBlock(pos)
+      return new RedstoneBlock(world, pos)
     case "pressure-plate": {
-      const block = new PressurePlate(pos, state.variant)
+      const block = new PressurePlate(world, pos, state.variant)
       block.entityCount = state.entityCount
       block.active = state.active
       block.scheduledDeactivationCheck = state.scheduledDeactivationCheck
       return block
     }
     case "comparator": {
-      const block = new Comparator(pos, Vec.fromJSON(state.facing), state.mode)
+      const block = new Comparator(world, pos, Vec.fromJSON(state.facing), state.mode)
       block.rearSignal = state.rearSignal
       block.leftSignal = state.leftSignal
       block.rightSignal = state.rightSignal

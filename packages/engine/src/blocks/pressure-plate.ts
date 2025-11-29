@@ -1,17 +1,19 @@
-import { Vec } from "../vec.js"
-import type { BlockType } from "./index.js"
+import { Vec, Y } from "../vec.js"
+import type { World } from "../world.js"
 
-export type PressurePlateVariant = "wood" | "stone" | "light_weighted" | "heavy_weighted"
+export type PressurePlateVariant = "wood" | "stone" | "light-weighted" | "heavy-weighted"
 
 export class PressurePlate {
   readonly type = "pressure-plate" as const
+  readonly world: World
   readonly pos: Vec
   readonly variant: PressurePlateVariant
   entityCount: number
   active: boolean
   scheduledDeactivationCheck: number | null
 
-  constructor(pos: Vec, variant: PressurePlateVariant = "stone") {
+  constructor(world: World, pos: Vec, variant: PressurePlateVariant = "stone") {
+    this.world = world
     this.pos = pos
     this.variant = variant
     this.entityCount = 0
@@ -26,9 +28,9 @@ export class PressurePlate {
       case "wood":
       case "stone":
         return 15
-      case "light_weighted":
+      case "light-weighted":
         return Math.min(this.entityCount, 15)
-      case "heavy_weighted":
+      case "heavy-weighted":
         return Math.min(Math.ceil(this.entityCount / 10), 15)
     }
   }
@@ -57,9 +59,10 @@ export class PressurePlate {
 
     return { deactivated: false }
   }
-}
 
-export function shouldPressurePlateDrop(supportBlock: { type: BlockType } | null): boolean {
-  if (!supportBlock) return true
-  return supportBlock.type !== "solid"
+  shouldDrop(): boolean {
+    const below = this.world.getBlock(this.pos.add(Y.neg))
+    if (!below) return true
+    return below.type !== "solid"
+  }
 }

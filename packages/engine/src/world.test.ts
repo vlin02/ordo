@@ -65,6 +65,7 @@ describe("Redstone Engine - Happy Path", () => {
 
     expect(torch.lit).toBe(true)
     tickN(world, 2)
+    
     expect(torch.lit).toBe(false)
 
     expect(piston.extended).toBe(true)

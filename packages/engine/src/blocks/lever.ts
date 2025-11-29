@@ -1,13 +1,16 @@
 import { Vec } from "../vec.js"
+import type { World } from "../world.js"
 
 export class Lever {
   readonly type = "lever" as const
+  readonly world: World
   readonly pos: Vec
   readonly attachedFace: Vec
   readonly attachedPos: Vec
   on: boolean
 
-  constructor(pos: Vec, attachedFace: Vec, attachedPos: Vec) {
+  constructor(world: World, pos: Vec, attachedFace: Vec, attachedPos: Vec) {
+    this.world = world
     this.pos = pos
     this.attachedFace = attachedFace
     this.attachedPos = attachedPos
@@ -16,6 +19,12 @@ export class Lever {
 
   toggle(): void {
     this.on = !this.on
+  }
+
+  shouldDrop(): boolean {
+    const attached = this.world.getBlock(this.attachedPos)
+    if (!attached) return true
+    return attached.type !== "solid" && attached.type !== "piston" && attached.type !== "sticky-piston"
   }
 }
 

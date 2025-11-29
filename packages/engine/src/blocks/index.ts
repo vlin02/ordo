@@ -2,7 +2,6 @@ export { Solid, type PowerState } from "./solid.js"
 export { Lever } from "./lever.js"
 export { Dust, type DustShape } from "./dust.js"
 export { Piston } from "./piston.js"
-export { StickyPiston } from "./sticky-piston.js"
 export { Repeater } from "./repeater.js"
 export { Torch } from "./torch.js"
 export { Observer } from "./observer.js"
@@ -16,7 +15,6 @@ import type { Solid } from "./solid.js"
 import type { Lever } from "./lever.js"
 import type { Dust } from "./dust.js"
 import type { Piston } from "./piston.js"
-import type { StickyPiston } from "./sticky-piston.js"
 import type { Repeater } from "./repeater.js"
 import type { Torch } from "./torch.js"
 import type { Observer } from "./observer.js"
@@ -46,7 +44,6 @@ export type Block =
   | Lever
   | Dust
   | Piston
-  | StickyPiston
   | Repeater
   | Torch
   | Observer
@@ -55,4 +52,3 @@ export type Block =
   | RedstoneBlock
   | PressurePlate
   | Comparator
-

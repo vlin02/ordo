@@ -1,6 +1,11 @@
 export type VecObj = { x: number; y: number; z: number }
 
 export class Vec {
+  static readonly ZERO = new Vec(0, 0, 0)
+  static readonly X = new Vec(1, 0, 0)
+  static readonly Y = new Vec(0, 1, 0)
+  static readonly Z = new Vec(0, 0, 1)
+
   constructor(
     public readonly x: number,
     public readonly y: number,
@@ -49,15 +54,15 @@ export class Vec {
   }
 
   perpendiculars(): Vec[] {
-    if (this.x !== 0) return [Z, Z.neg]
-    if (this.z !== 0) return [X, X.neg]
-    return [X, X.neg]
+    if (this.x !== 0) return [Vec.Z, Vec.Z.neg]
+    if (this.z !== 0) return [Vec.X, Vec.X.neg]
+    return [Vec.X, Vec.X.neg]
   }
 }
 
-export const X = new Vec(1, 0, 0)
-export const Y = new Vec(0, 1, 0)
-export const Z = new Vec(0, 0, 1)
+export const X = Vec.X
+export const Y = Vec.Y
+export const Z = Vec.Z
 
 export const HORIZONTALS = [X, X.neg, Z, Z.neg]
 export const ALL_DIRECTIONS = [X, X.neg, Y, Y.neg, Z, Z.neg]
