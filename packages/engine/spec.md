@@ -43,13 +43,15 @@ Two positions are **adjacent** iff they differ by exactly 1 in exactly one coord
 
 **Conductive blocks in scope**: solid block, slime block (despite visual transparency).
 
+**Gravity**: None of the 13 blocks in scope are gravity-affected. All remain stationary when unsupported.
+
 ### D3: Power States (Conductive Blocks Only)
 
 | State | Condition | Powers Adjacent Dust? |
 |-------|-----------|----------------------|
 | Unpowered | No power received | No |
 | Weakly-powered | Powered ONLY by dust on top or pointing at it | No |
-| Strongly-powered | Powered by lever, button, pressure plate, repeater front, comparator front, torch above, observer back | Yes (SS=15) |
+| Strongly-powered | Powered by lever, button, pressure plate, repeater front, comparator front, torch below, observer back | Yes (SS=15) |
 
 Both weakly and strongly-powered blocks activate adjacent mechanisms and power repeaters/comparators.
 
@@ -58,14 +60,16 @@ Both weakly and strongly-powered blocks activate adjacent mechanisms and power r
 | Class | Behavior | Blocks |
 |-------|----------|--------|
 | NORMAL | Pushed and pulled | solid block, slime block, redstone block, observer, retracted piston/sticky piston |
-| DESTROY | Drops as item | dust, lever, button, pressure plate, repeater, comparator, torch |
-| IMMOVABLE | Piston fails | extended piston, piston head |
+| DESTROY | Drops as item | dust, lever, button, pressure plate, torch |
+| IMMOVABLE | Piston fails | extended piston, piston head, repeater, comparator |
+
+Note: Glazed terracotta (not in scope) is pushable but not pullable and does not stick to slime blocks.
 
 ### D5: Entity
 - **Player**: user-controlled
 - **Mob**: living creature (includes armor stand)
 - **Item**: dropped stack (1 stack = 1 entity)
-- **Projectile**: arrow, trident, snowball, egg, etc.
+- **Projectile**: arrow, trident, snowball, egg, wind charge, etc.
 
 ### D6: Block State
 
@@ -93,8 +97,8 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 **Connects when:**
 1. P+D contains: dust, lever, torch, redstone block
 2. P+D contains repeater/comparator with back or front facing P
-3. P+D+Y contains dust AND P+D is not conductive/slime block
-4. P+D-Y contains dust AND P+Y is not conductive/slime block
+3. P+D+Y contains dust AND P+D is not conductive
+4. P+D-Y contains dust AND P+Y is not conductive
 
 **Does NOT connect to:** button, pressure plate, piston, observer, repeater/comparator sides
 
@@ -107,7 +111,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Solid Block
 
-**Physical**: 1×1×1. Full collision. NORMAL movability.
+**Physical**: 1×1×1. Full collision. NORMAL movability. Not gravity-affected.
 
 **Visual**: Opaque cube.
 
@@ -138,7 +142,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 **Interaction**:
 - Right-click activates
 - Wood: arrow/trident activates until despawn (60s) or pickup
-- Stone: projectiles do NOT activate
+- Stone: arrows/tridents do NOT activate; wind charges DO activate
 
 **Timing**:
 
@@ -176,7 +180,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Redstone Dust
 
-**Physical**: On top of conductive block, glowstone, upside-down slab/stairs, glass, hopper, observer. No collision. DESTROY.
+**Physical**: On top of conductive block, glowstone, upside-down slab/stairs, glass, hopper. No collision. DESTROY.
 
 **Visual**: Dark red (SS=0) to bright red (SS=15). Shape per D7.
 
@@ -204,7 +208,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Repeater
 
-**Physical**: On top of conductive block, slime block, upside-down slab/stairs. Height 2/16. No collision. DESTROY.
+**Physical**: On top of conductive block, slime block, upside-down slab/stairs. Height 2/16. No collision. IMMOVABLE.
 
 **Visual**: Slab with arrow. Two torches indicate delay. Gray bar when locked.
 
@@ -235,17 +239,17 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Comparator
 
-**Physical**: On top of conductive block, slime block, upside-down slab/stairs. Height 2/16. No collision. DESTROY.
+**Physical**: On top of conductive block, slime block, upside-down slab/stairs. Height 2/16. No collision. IMMOVABLE.
 
 **Visual**: Slab with arrow. Three torches. Front torch lit = subtract mode.
 
 **Interaction**: Right-click toggles compare↔subtract.
 
-**Delay**: 2 gt. Does NOT respond to pulses < 2 gt.
+**Delay**: 2 gt. Does NOT respond to 1 gt pulses; may respond to 2 gt pulses in specific configurations.
 
 **Rear input R**: Maximum from dust, powered conductive block, repeater/comparator/observer output, lever, button, pressure plate, torch, redstone block.
 
-**Side input S**: max(left, right). Each accepts ONLY: dust, redstone block, repeater/comparator/observer output.
+**Side input S**: max(left, right). Each accepts ONLY: dust, redstone block (Java Edition), repeater/comparator/observer output facing in.
 
 **Output**:
 
@@ -260,13 +264,13 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Redstone Torch
 
-**Physical**: Attaches to top/side of conductive block or slime block; top of piston base, fence, glass, upside-down slab/stairs. NOT bottom. No collision. DESTROY.
+**Physical**: Attaches to top/side of conductive block; top of fence, glass, upside-down slab/stairs, cobblestone wall. NOT bottom. No collision. DESTROY.
 
 **Visual**: Stick with tip. Lit: red glow, light level 7. Unlit: dark.
 
 **Delay**: 2 gt.
 
-**Input**: Strongly-powered attachment block → OFF. Otherwise → ON. (Weakly-powered does NOT turn off.)
+**Input**: Powered attachment block (weak OR strong) → OFF. Otherwise → ON. Non-conductive attachment blocks cannot be powered, so torch stays on.
 
 **Output** (lit):
 - SS=15 to all 6 adjacent EXCEPT attachment block
@@ -280,7 +284,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Piston / Sticky Piston
 
-**Physical**: Facing any direction. Retracted: 1×1×1, NORMAL. Extended: 2 blocks, IMMOVABLE.
+**Physical**: Facing any direction. Retracted: 1×1×1, NORMAL. Extended: 2 blocks, IMMOVABLE. Not gravity-affected.
 
 **Visual**: Stone base, wood front (piston) or green slime front (sticky). Animation: 2 gt.
 
@@ -296,7 +300,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 **Activation** (any face EXCEPT front):
 - Adjacent lever/button/pressure plate (on/active)
-- Adjacent powered conductive block
+- Adjacent powered conductive block (weak or strong)
 - Adjacent lit torch, redstone block
 - Dust (SS≥1) pointing at or on top
 - Repeater/comparator/observer outputting in
@@ -313,7 +317,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Observer
 
-**Physical**: 1×1×1. Full collision. NORMAL.
+**Physical**: 1×1×1. Full collision. NORMAL. Not gravity-affected.
 
 **Visual**: Stone with face (front), red dot (back). Dot lights during pulse.
 
@@ -338,9 +342,9 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 ## Slime Block
 
-**Physical**: 1×1×1. Full collision. NORMAL with stickiness.
+**Physical**: 1×1×1. Full collision. NORMAL with stickiness. Not gravity-affected.
 
-**Stickiness**: Adjacent NORMAL blocks move together when piston moves this. Recursive. Total ≤12.
+**Stickiness**: Adjacent NORMAL blocks move together when piston moves this. Recursive. Total ≤12. Does NOT stick to: glazed terracotta, honey blocks.
 
 **Visual**: Translucent green cube.
 
@@ -352,14 +356,14 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 - Friction: 0.8 (normal=0.6, ice=0.98)
 - Landing: bounce (velocity inverted), no fall damage
 - Jump held: no bounce, no damage
-- Sneak held: no bounce, takes damage
-- Items/minecarts/boats: do NOT bounce
+- Sneak held: no bounce, takes damage (1.21.0–1.21.1); no damage (1.21.2+)
+- Items/minecarts/boats/falling blocks: do NOT bounce
 
 ---
 
 ## Redstone Block
 
-**Physical**: 1×1×1. Full collision. NORMAL.
+**Physical**: 1×1×1. Full collision. NORMAL. Not gravity-affected.
 
 **Visual**: Red cube with circuit pattern.
 
@@ -384,9 +388,11 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 
 **Trigger**: State change at P.
 
-**Recipients**:
-1. All 6 adjacent to P
-2. All 6 adjacent to (P.X, P.Y+1, P.Z) — enables quasi-connectivity
+**Recipients**: All blocks within taxicab distance ≤2 from P receive updates. This includes:
+- 6 blocks adjacent to P (distance 1)
+- 12 blocks at distance 2
+
+**Quasi-connectivity note**: Pistons/dispensers/droppers check activation conditions at Y+1, but updates only propagate distance 2. This mismatch causes BUD (Block Update Detector) behavior where components are "powered" but not "updated."
 
 **Response**:
 
@@ -395,7 +401,7 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 | Dust | Recalculates SS |
 | Repeater/Comparator | Re-evaluates, schedules change |
 | Torch | Re-evaluates attachment block power |
-| Piston | Re-evaluates activation |
+| Piston | Re-evaluates activation (including Y+1) |
 | Observer | No response (detects at front only) |
 
 ---
@@ -418,5 +424,3 @@ For dust at P, direction D ∈ {+X,-X,+Z,-Z}:
 | Burnout | — | ≥8/60 gt |
 
 ---
-
-*13 blocks. All values verified against minecraft.wiki, Java Edition 1.21.*

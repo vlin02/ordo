@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { World } from "../world.js"
 import { Vec, X, Y, Z } from "../vec.js"
-import { Slice, blockSymbol, parseSymbol } from "./grid.js"
+import { Slice, GridRenderer } from "./grid.js"
 
 const PX = X
 const NX = X.neg
@@ -51,20 +51,22 @@ describe("Grid Visualization", () => {
     torch.lit = false
     slime.powerState = "strongly-powered"
 
+    const renderer = new GridRenderer(world)
+
     // Generate symbols
-    expect(blockSymbol(lever, world)).toBe("L←*")
-    expect(blockSymbol(dust, world)).toBe("D14─")
-    expect(blockSymbol(repeater, world)).toBe("R→2*")
-    expect(blockSymbol(piston, world)).toBe("P→*")
-    expect(blockSymbol(comparator, world)).toBe("C=→08/08")
-    expect(blockSymbol(observer, world)).toBe("O→*")
-    expect(blockSymbol(button, world)).toBe("Bs-*")
-    expect(blockSymbol(plate, world)).toBe("PPg*05")
-    expect(blockSymbol(torch, world)).toBe("T←")
-    expect(blockSymbol(slime, world)).toBe("SL^")
-    expect(blockSymbol(rblock, world)).toBe("RB")
+    expect(renderer.symbol(lever)).toBe("L←*")
+    expect(renderer.symbol(dust)).toBe("D14─")
+    expect(renderer.symbol(repeater)).toBe("R→2*")
+    expect(renderer.symbol(piston)).toBe("P→*")
+    expect(renderer.symbol(comparator)).toBe("C=→08/08")
+    expect(renderer.symbol(observer)).toBe("O→*")
+    expect(renderer.symbol(button)).toBe("Bs-*")
+    expect(renderer.symbol(plate)).toBe("PPg*05")
+    expect(renderer.symbol(torch)).toBe("T←")
+    expect(renderer.symbol(slime)).toBe("SL^")
+    expect(renderer.symbol(rblock)).toBe("RB")
     // sticky piston near redstone block gets activated
-    expect(blockSymbol(sticky, world)).toMatch(/^SP→[*!]?$/)
+    expect(renderer.symbol(sticky)).toMatch(/^SP→[*!]?$/)
 
     // Render slice
     const grid = new Slice(world).render(0, [0, 0], [13, 0])
@@ -73,12 +75,12 @@ describe("Grid Visualization", () => {
     expect(grid).toContain("P→*")
 
     // Parse round-trip
-    expect(parseSymbol("L←*")).toEqual({ type: "lever", attached: "←", on: true })
-    expect(parseSymbol("D14─")).toEqual({ type: "dust", signal: 14, shape: "─" })
-    expect(parseSymbol("R→2*")).toEqual({ type: "repeater", facing: "→", delay: 2, on: true, locked: false })
-    expect(parseSymbol("C=→08/08")).toEqual({ type: "comparator", mode: "cmp", facing: "→", rear: 8, output: 8 })
-    expect(parseSymbol("PPg*05")).toEqual({ type: "pressure-plate", variant: "light-weighted", active: true, count: 5 })
-    expect(parseSymbol("???")).toEqual({ type: "unknown", raw: "???" })
+    expect(renderer.parse("L←*")).toEqual({ type: "lever", attached: "←", on: true })
+    expect(renderer.parse("D14─")).toEqual({ type: "dust", signal: 14, shape: "─" })
+    expect(renderer.parse("R→2*")).toEqual({ type: "repeater", facing: "→", delay: 2, on: true, locked: false })
+    expect(renderer.parse("C=→08/08")).toEqual({ type: "comparator", mode: "cmp", facing: "→", rear: 8, output: 8 })
+    expect(renderer.parse("PPg*05")).toEqual({ type: "pressure-plate", variant: "light-weighted", active: true, count: 5 })
+    expect(renderer.parse("???")).toEqual({ type: "unknown", raw: "???" })
   })
 
   it("dust shapes reflect connection patterns", () => {
@@ -95,7 +97,9 @@ describe("Grid Visualization", () => {
     world.dust(v(0, 0, 1))
     world.solid(v(0, -1, -1))
     world.dust(v(0, 0, -1))
-    expect(blockSymbol(crossDust, world)).toContain("┼")
+
+    const renderer = new GridRenderer(world)
+    expect(renderer.symbol(crossDust)).toContain("┼")
 
     // Line E-W (2 connections)
     const world2 = new World()
@@ -105,13 +109,17 @@ describe("Grid Visualization", () => {
     world2.dust(v(1, 0, 0))
     world2.solid(v(-1, -1, 0))
     world2.dust(v(-1, 0, 0))
-    expect(blockSymbol(lineDust, world2)).toContain("─")
+
+    const renderer2 = new GridRenderer(world2)
+    expect(renderer2.symbol(lineDust)).toContain("─")
 
     // Dot (0 connections)
     const world3 = new World()
     world3.solid(v(0, -1, 0))
     const dotDust = world3.dust(v(0, 0, 0))
     dotDust.shape = "dot"
-    expect(blockSymbol(dotDust, world3)).toContain("·")
+
+    const renderer3 = new GridRenderer(world3)
+    expect(renderer3.symbol(dotDust)).toContain("·")
   })
 })

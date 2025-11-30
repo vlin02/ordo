@@ -72,168 +72,7 @@ const PLATE_VARIANTS_REV = Object.fromEntries(
   Object.entries(PLATE_VARIANTS).map(([k, v]) => [v, k])
 )
 
-export class Slice {
-  constructor(readonly world: World) {}
-
-  render(y: number, start: [number, number], end: [number, number]): string {
-    const [minX, minZ] = start
-    const [maxX, maxZ] = end
-
-    const lines: string[] = []
-    lines.push(`Y=${y}:`)
-
-    let header = "z\\x".padStart(5)
-    for (let x = minX; x <= maxX; x++) header += String(x).padStart(CELL_WIDTH)
-    lines.push(header)
-
-    for (let z = minZ; z <= maxZ; z++) {
-      let row = String(z).padStart(5)
-      for (let x = minX; x <= maxX; x++) {
-        const block = this.world.getBlock(new Vec(x, y, z))
-        row += blockSymbol(block, this.world).padStart(CELL_WIDTH)
-      }
-      lines.push(row)
-    }
-
-    return lines.join("\n")
-  }
-}
-
-function vecToArrow(v: Vec): string {
-  return DIR_ARROWS[`${v.x},${v.y},${v.z}`] ?? "?"
-}
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, "0")
-}
-
-function getDustConnections(dust: Block, world: World): string {
-  if (dust.type !== "dust") return ""
-  if (dust.shape === "dot") return ""
-
-  const dirs: string[] = []
-  const pos = dust.pos
-
-  const neighbors = [
-    { dir: "N", vec: Z.neg },
-    { dir: "E", vec: X },
-    { dir: "S", vec: Z },
-    { dir: "W", vec: X.neg },
-  ]
-
-  for (const { dir, vec } of neighbors) {
-    const adjPos = pos.add(vec)
-    const adj = world.getBlock(adjPos)
-    if (adj && connectsToDust(adj, vec.neg)) {
-      dirs.push(dir)
-    }
-    const above = world.getBlock(adjPos.add(Y))
-    if (above?.type === "dust") {
-      const blockingAbove = world.getBlock(pos.add(Y))
-      if (!blockingAbove || blockingAbove.type !== "solid") {
-        dirs.push(dir)
-      }
-    }
-    const below = world.getBlock(adjPos.add(Y.neg))
-    if (below?.type === "dust") {
-      if (!adj || adj.type !== "solid") {
-        dirs.push(dir)
-      }
-    }
-  }
-
-  const unique = [...new Set(dirs)].sort((a, b) => "NESW".indexOf(a) - "NESW".indexOf(b))
-  return unique.join("")
-}
-
-function connectsToDust(block: Block, fromDir: Vec): boolean {
-  switch (block.type) {
-    case "dust": return true
-    case "lever": return true
-    case "torch": return true
-    case "redstone-block": return true
-    case "repeater": return block.facing.equals(fromDir) || block.facing.neg.equals(fromDir)
-    case "comparator": return block.facing.equals(fromDir) || block.facing.neg.equals(fromDir)
-    case "observer": return block.facing.neg.equals(fromDir)
-    default: return false
-  }
-}
-
-export function blockSymbol(block: Block | null | undefined, world?: World): string {
-  if (!block) return "."
-
-  switch (block.type) {
-    case "solid": {
-      const pwr = block.powerState === "strongly-powered" ? "^" : block.powerState === "weakly-powered" ? "~" : ""
-      return `S${pwr}`
-    }
-    case "slime": {
-      const pwr = block.powerState === "strongly-powered" ? "^" : block.powerState === "weakly-powered" ? "~" : ""
-      return `SL${pwr}`
-    }
-    case "redstone-block":
-      return "RB"
-    case "dust": {
-      const sig = pad2(block.signalStrength)
-      const connections = world ? getDustConnections(block, world) : ""
-      const shp = DUST_SHAPES[connections] ?? (connections.length === 4 ? "┼" : "·")
-      return `D${sig}${shp}`
-    }
-    case "lever": {
-      const att = vecToArrow(block.attachedFace)
-      const state = block.on ? "*" : ""
-      return `L${att}${state}`
-    }
-    case "button": {
-      const variant = block.variant === "wood" ? "w" : "s"
-      const att = vecToArrow(block.attachedFace)
-      const state = block.pressed ? "*" : ""
-      return `B${variant}${att}${state}`
-    }
-    case "torch": {
-      const att = vecToArrow(block.attachedFace)
-      const state = block.burnedOut ? "x" : block.lit ? "*" : ""
-      return `T${att}${state}`
-    }
-    case "pressure-plate": {
-      const v = PLATE_VARIANTS[block.variant] ?? "s"
-      if (!block.active) return `PP${v}`
-      const cnt = pad2(block.entityCount)
-      return `PP${v}*${cnt}`
-    }
-    case "repeater": {
-      const fac = vecToArrow(block.facing)
-      const dly = block.delay / 2
-      const on = block.outputOn ? "*" : ""
-      const locked = block.locked ? "K" : ""
-      return `R${fac}${dly}${on}${locked}`
-    }
-    case "comparator": {
-      const mode = block.mode === "subtraction" ? "-" : "="
-      const fac = vecToArrow(block.facing)
-      const rear = pad2(block.rearSignal)
-      const out = pad2(block.outputSignal)
-      return `C${mode}${fac}${rear}/${out}`
-    }
-    case "piston":
-    case "sticky-piston": {
-      const prefix = block.type === "sticky-piston" ? "SP" : "P"
-      const fac = vecToArrow(block.facing)
-      const state = block.extended ? "*" : block.activationTick !== null ? "!" : ""
-      return `${prefix}${fac}${state}`
-    }
-    case "observer": {
-      const fac = vecToArrow(block.facing)
-      const state = block.outputOn ? "*" : ""
-      return `O${fac}${state}`
-    }
-    default:
-      return "?"
-  }
-}
-
-// Regex patterns for parsing symbols (matches the format column)
-export const PATTERNS = {
+const PATTERNS = {
   air: /^\.$/,
   solid: /^S([~^])?$/,
   slime: /^SL([~^])?$/,
@@ -267,68 +106,238 @@ export type ParsedSymbol =
   | { type: "observer"; facing: string; pulsing: boolean }
   | { type: "unknown"; raw: string }
 
-export function parseSymbol(symbol: string): ParsedSymbol {
-  if (PATTERNS.air.test(symbol)) return { type: "air" }
+export class GridRenderer {
+  constructor(private world?: World) {}
 
-  let m: RegExpMatchArray | null
-  if ((m = symbol.match(PATTERNS.solid))) {
-    const p = m[1]
-    return { type: "solid", power: p === "^" ? "strong" : p === "~" ? "weak" : undefined }
-  }
-  if ((m = symbol.match(PATTERNS.slime))) {
-    const p = m[1]
-    return { type: "slime", power: p === "^" ? "strong" : p === "~" ? "weak" : undefined }
-  }
-  if (PATTERNS.redstoneBlock.test(symbol)) return { type: "redstone-block" }
-  if ((m = symbol.match(PATTERNS.dust))) {
-    return { type: "dust", signal: parseInt(m[1]), shape: m[2] }
-  }
-  if ((m = symbol.match(PATTERNS.lever))) {
-    return { type: "lever", attached: m[1], on: symbol.endsWith("*") }
-  }
-  if ((m = symbol.match(PATTERNS.button))) {
-    return { type: "button", variant: m[1] as "s" | "w", attached: m[2], pressed: symbol.endsWith("*") }
-  }
-  if ((m = symbol.match(PATTERNS.torch))) {
-    const s = m[2]
-    return { type: "torch", attached: m[1], state: s === "x" ? "burned" : s === "*" ? "lit" : "unlit" }
-  }
-  if ((m = symbol.match(PATTERNS.pressurePlate))) {
-    return {
-      type: "pressure-plate",
-      variant: PLATE_VARIANTS_REV[m[1]] ?? m[1],
-      active: !!m[2],
-      count: m[3] ? parseInt(m[3]) : undefined,
+  symbol(block: Block | null | undefined): string {
+    if (!block) return "."
+
+    switch (block.type) {
+      case "solid": {
+        const pwr = block.powerState === "strongly-powered" ? "^" : block.powerState === "weakly-powered" ? "~" : ""
+        return `S${pwr}`
+      }
+      case "slime": {
+        const pwr = block.powerState === "strongly-powered" ? "^" : block.powerState === "weakly-powered" ? "~" : ""
+        return `SL${pwr}`
+      }
+      case "redstone-block":
+        return "RB"
+      case "dust": {
+        const sig = this.pad2(block.signalStrength)
+        const connections = this.world ? this.getDustConnections(block) : ""
+        const shp = DUST_SHAPES[connections] ?? (connections.length === 4 ? "┼" : "·")
+        return `D${sig}${shp}`
+      }
+      case "lever": {
+        const att = this.vecToArrow(block.attachedFace)
+        const state = block.on ? "*" : ""
+        return `L${att}${state}`
+      }
+      case "button": {
+        const variant = block.variant === "wood" ? "w" : "s"
+        const att = this.vecToArrow(block.attachedFace)
+        const state = block.pressed ? "*" : ""
+        return `B${variant}${att}${state}`
+      }
+      case "torch": {
+        const att = this.vecToArrow(block.attachedFace)
+        const state = block.burnedOut ? "x" : block.lit ? "*" : ""
+        return `T${att}${state}`
+      }
+      case "pressure-plate": {
+        const v = PLATE_VARIANTS[block.variant] ?? "s"
+        if (!block.active) return `PP${v}`
+        const cnt = this.pad2(block.entityCount)
+        return `PP${v}*${cnt}`
+      }
+      case "repeater": {
+        const fac = this.vecToArrow(block.facing)
+        const dly = block.delay / 2
+        const on = block.outputOn ? "*" : ""
+        const locked = block.locked ? "K" : ""
+        return `R${fac}${dly}${on}${locked}`
+      }
+      case "comparator": {
+        const mode = block.mode === "subtraction" ? "-" : "="
+        const fac = this.vecToArrow(block.facing)
+        const rear = this.pad2(block.rearSignal)
+        const out = this.pad2(block.outputSignal)
+        return `C${mode}${fac}${rear}/${out}`
+      }
+      case "piston":
+      case "sticky-piston": {
+        const prefix = block.type === "sticky-piston" ? "SP" : "P"
+        const fac = this.vecToArrow(block.facing)
+        const state = block.extended ? "*" : block.activationTick !== null ? "!" : ""
+        return `${prefix}${fac}${state}`
+      }
+      case "observer": {
+        const fac = this.vecToArrow(block.facing)
+        const state = block.outputOn ? "*" : ""
+        return `O${fac}${state}`
+      }
+      default:
+        return "?"
     }
   }
-  if ((m = symbol.match(PATTERNS.repeater))) {
-    return {
-      type: "repeater",
-      facing: m[1],
-      delay: parseInt(m[2]),
-      on: symbol.includes("*"),
-      locked: symbol.includes("K"),
+
+  parse(symbol: string): ParsedSymbol {
+    if (PATTERNS.air.test(symbol)) return { type: "air" }
+
+    let m: RegExpMatchArray | null
+    if ((m = symbol.match(PATTERNS.solid))) {
+      const p = m[1]
+      return { type: "solid", power: p === "^" ? "strong" : p === "~" ? "weak" : undefined }
+    }
+    if ((m = symbol.match(PATTERNS.slime))) {
+      const p = m[1]
+      return { type: "slime", power: p === "^" ? "strong" : p === "~" ? "weak" : undefined }
+    }
+    if (PATTERNS.redstoneBlock.test(symbol)) return { type: "redstone-block" }
+    if ((m = symbol.match(PATTERNS.dust))) {
+      return { type: "dust", signal: parseInt(m[1]), shape: m[2] }
+    }
+    if ((m = symbol.match(PATTERNS.lever))) {
+      return { type: "lever", attached: m[1], on: symbol.endsWith("*") }
+    }
+    if ((m = symbol.match(PATTERNS.button))) {
+      return { type: "button", variant: m[1] as "s" | "w", attached: m[2], pressed: symbol.endsWith("*") }
+    }
+    if ((m = symbol.match(PATTERNS.torch))) {
+      const s = m[2]
+      return { type: "torch", attached: m[1], state: s === "x" ? "burned" : s === "*" ? "lit" : "unlit" }
+    }
+    if ((m = symbol.match(PATTERNS.pressurePlate))) {
+      return {
+        type: "pressure-plate",
+        variant: PLATE_VARIANTS_REV[m[1]] ?? m[1],
+        active: !!m[2],
+        count: m[3] ? parseInt(m[3]) : undefined,
+      }
+    }
+    if ((m = symbol.match(PATTERNS.repeater))) {
+      return {
+        type: "repeater",
+        facing: m[1],
+        delay: parseInt(m[2]),
+        on: symbol.includes("*"),
+        locked: symbol.includes("K"),
+      }
+    }
+    if ((m = symbol.match(PATTERNS.comparator))) {
+      return {
+        type: "comparator",
+        mode: m[1] === "-" ? "sub" : "cmp",
+        facing: m[2],
+        rear: parseInt(m[3]),
+        output: parseInt(m[4]),
+      }
+    }
+    if ((m = symbol.match(PATTERNS.piston))) {
+      const s = m[2]
+      return { type: "piston", facing: m[1], state: s === "*" ? "extended" : s === "!" ? "activating" : "retracted" }
+    }
+    if ((m = symbol.match(PATTERNS.stickyPiston))) {
+      const s = m[2]
+      return { type: "sticky-piston", facing: m[1], state: s === "*" ? "extended" : s === "!" ? "activating" : "retracted" }
+    }
+    if ((m = symbol.match(PATTERNS.observer))) {
+      return { type: "observer", facing: m[1], pulsing: symbol.endsWith("*") }
+    }
+    return { type: "unknown", raw: symbol }
+  }
+
+  private vecToArrow(v: Vec): string {
+    return DIR_ARROWS[`${v.x},${v.y},${v.z}`] ?? "?"
+  }
+
+  private pad2(n: number): string {
+    return n.toString().padStart(2, "0")
+  }
+
+  private getDustConnections(dust: Block): string {
+    if (dust.type !== "dust" || !this.world) return ""
+    if (dust.shape === "dot") return ""
+
+    const dirs: string[] = []
+    const pos = dust.pos
+
+    const neighbors = [
+      { dir: "N", vec: Z.neg },
+      { dir: "E", vec: X },
+      { dir: "S", vec: Z },
+      { dir: "W", vec: X.neg },
+    ]
+
+    for (const { dir, vec } of neighbors) {
+      const adjPos = pos.add(vec)
+      const adj = this.world.getBlock(adjPos)
+      if (adj && this.connectsToDust(adj, vec.neg)) {
+        dirs.push(dir)
+      }
+      const above = this.world.getBlock(adjPos.add(Y))
+      if (above?.type === "dust") {
+        const blockingAbove = this.world.getBlock(pos.add(Y))
+        if (!blockingAbove || blockingAbove.type !== "solid") {
+          dirs.push(dir)
+        }
+      }
+      const below = this.world.getBlock(adjPos.add(Y.neg))
+      if (below?.type === "dust") {
+        if (!adj || adj.type !== "solid") {
+          dirs.push(dir)
+        }
+      }
+    }
+
+    const unique = [...new Set(dirs)].sort((a, b) => "NESW".indexOf(a) - "NESW".indexOf(b))
+    return unique.join("")
+  }
+
+  private connectsToDust(block: Block, fromDir: Vec): boolean {
+    switch (block.type) {
+      case "dust": return true
+      case "lever": return true
+      case "torch": return true
+      case "redstone-block": return true
+      case "repeater": return block.facing.equals(fromDir) || block.facing.neg.equals(fromDir)
+      case "comparator": return block.facing.equals(fromDir) || block.facing.neg.equals(fromDir)
+      case "observer": return block.facing.neg.equals(fromDir)
+      default: return false
     }
   }
-  if ((m = symbol.match(PATTERNS.comparator))) {
-    return {
-      type: "comparator",
-      mode: m[1] === "-" ? "sub" : "cmp",
-      facing: m[2],
-      rear: parseInt(m[3]),
-      output: parseInt(m[4]),
-    }
-  }
-  if ((m = symbol.match(PATTERNS.piston))) {
-    const s = m[2]
-    return { type: "piston", facing: m[1], state: s === "*" ? "extended" : s === "!" ? "activating" : "retracted" }
-  }
-  if ((m = symbol.match(PATTERNS.stickyPiston))) {
-    const s = m[2]
-    return { type: "sticky-piston", facing: m[1], state: s === "*" ? "extended" : s === "!" ? "activating" : "retracted" }
-  }
-  if ((m = symbol.match(PATTERNS.observer))) {
-    return { type: "observer", facing: m[1], pulsing: symbol.endsWith("*") }
-  }
-  return { type: "unknown", raw: symbol }
 }
+
+export class Slice {
+  private renderer: GridRenderer
+
+  constructor(readonly world: World) {
+    this.renderer = new GridRenderer(world)
+  }
+
+  render(y: number, start: [number, number], end: [number, number]): string {
+    const [minX, minZ] = start
+    const [maxX, maxZ] = end
+
+    const lines: string[] = []
+    lines.push(`Y=${y}:`)
+
+    let header = "z\\x".padStart(5)
+    for (let x = minX; x <= maxX; x++) header += String(x).padStart(CELL_WIDTH)
+    lines.push(header)
+
+    for (let z = minZ; z <= maxZ; z++) {
+      let row = String(z).padStart(5)
+      for (let x = minX; x <= maxX; x++) {
+        const block = this.world.getBlock(new Vec(x, y, z))
+        row += this.renderer.symbol(block).padStart(CELL_WIDTH)
+      }
+      lines.push(row)
+    }
+
+    return lines.join("\n")
+  }
+}
+
+export { PATTERNS }

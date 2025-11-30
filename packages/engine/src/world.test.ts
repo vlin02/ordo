@@ -782,7 +782,7 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(plate.active).toBe(false) // Deactivated at 10gt
   })
 
-  it("torch NOT turned off by weakly-powered block", () => {
+  it("torch turned off by weakly-powered block", () => {
     const world = new World()
     const base = world.solid(v(0, 0, 0))
     const torch = world.torch(v(1, 0, 0), NX) // Torch attached to side of base
@@ -798,7 +798,7 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(base.powerState).toBe("weakly-powered")
 
     tickN(world, 4)
-    expect(torch.lit).toBe(true) // Still lit - weakly-powered does NOT turn off
+    expect(torch.lit).toBe(false) // Turned off - weak OR strong power turns off torch
   })
 
 })

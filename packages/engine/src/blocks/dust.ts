@@ -27,7 +27,6 @@ export class Dust {
     if (!below) return true
     if (below.type === "solid") return false
     if (below.type === "slime") return false
-    if (below.type === "observer") return false
     return true
   }
 

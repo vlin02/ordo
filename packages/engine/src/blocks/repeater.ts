@@ -3,7 +3,7 @@ import type { World } from "../world.js"
 
 export class Repeater {
   readonly type = "repeater" as const
-  readonly movability = "destroy" as const
+  readonly movability = "immovable" as const
   readonly world: World
   readonly pos: Vec
   readonly facing: Vec

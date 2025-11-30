@@ -75,6 +75,6 @@ export class Torch {
     if (!attachedBlock) return true
     if (attachedBlock.type === "redstone-block") return false
     if (attachedBlock.type !== "solid" && attachedBlock.type !== "slime") return true
-    return !this.world.isStronglyPowered(this.attachedPos)
+    return !this.world.isWeaklyPowered(this.attachedPos)
   }
 }

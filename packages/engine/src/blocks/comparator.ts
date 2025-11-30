@@ -5,7 +5,7 @@ export type ComparatorMode = "comparison" | "subtraction"
 
 export class Comparator {
   readonly type = "comparator" as const
-  readonly movability = "destroy" as const
+  readonly movability = "immovable" as const
   readonly world: World
   readonly pos: Vec
   readonly facing: Vec
