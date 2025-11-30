@@ -92,7 +92,7 @@ export class Agent {
   }
 
   get currentTick(): number {
-    return this.#world.getCurrentTick()
+    return this.#world.currentTick
   }
 
   // === Visualization ===

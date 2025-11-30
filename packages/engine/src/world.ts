@@ -16,15 +16,27 @@ import { type Snapshot, serializeBlock, deserializeBlock } from "./snapshot.js"
 
 export class World {
   private grid: Map<string, Block>
-  tickCounter: number
+  private _tick: number
   private updateQueue: Set<string>
   private scheduledEvents: Map<number, Set<string>>
 
   constructor() {
     this.grid = new Map()
-    this.tickCounter = 0
+    this._tick = 0
     this.updateQueue = new Set()
     this.scheduledEvents = new Map()
+  }
+
+  get currentTick(): number {
+    return this._tick
+  }
+
+  scheduleUpdate(pos: Vec, delay: number): void {
+    const targetTick = this._tick + delay
+    if (!this.scheduledEvents.has(targetTick)) {
+      this.scheduledEvents.set(targetTick, new Set())
+    }
+    this.scheduledEvents.get(targetTick)!.add(pos.toKey())
   }
 
   solid(pos: Vec): Solid {
@@ -141,11 +153,7 @@ export class World {
       if (block.pressed) {
         throw new Error(`Cannot interact: button at ${block.pos} is already pressed`)
       }
-      const duration = block.variant === "wood" ? 30 : 20
-      const releaseTick = this.tickCounter + duration
-      block.pressed = true
-      block.scheduledRelease = releaseTick
-      this.scheduleEvent(releaseTick, block.pos)
+      block.press()
       this.triggerBlockUpdate(block.pos)
     } else if (block.type === "comparator") {
       const newMode = block.mode === "comparison" ? "subtraction" : "comparison"
@@ -163,24 +171,23 @@ export class World {
     plate.entityCount = newCount
 
     if (plate.entityCount > 0 && !wasActive) {
-      const checkTick = plate.activate(this.tickCounter)
+      plate.activate()
       this.notifyObserversAt(plate.pos)
       this.triggerBlockUpdate(plate.pos)
-      this.scheduleEvent(checkTick, plate.pos)
     }
 
     this.processBlockUpdates()
   }
 
   tick(): void {
-    this.tickCounter++
+    this._tick++
 
-    const positions = this.scheduledEvents.get(this.tickCounter)
+    const positions = this.scheduledEvents.get(this._tick)
     if (positions) {
       for (const key of positions) {
         this.updateQueue.add(key)
       }
-      this.scheduledEvents.delete(this.tickCounter)
+      this.scheduledEvents.delete(this._tick)
     }
 
     this.processBlockUpdates()
@@ -194,13 +201,9 @@ export class World {
     return Array.from(this.grid.values())
   }
 
-  getCurrentTick(): number {
-    return this.tickCounter
-  }
-
   toSnapshot(): Snapshot {
     return {
-      tickCounter: this.tickCounter,
+      tickCounter: this._tick,
       blocks: Array.from(this.grid.values()).map(serializeBlock),
       events: Array.from(this.scheduledEvents).map(([tick, keys]) => ({
         tick,
@@ -228,16 +231,8 @@ export class World {
       }
     }
 
-    world.tickCounter = snapshot.tickCounter ?? 0
+    world._tick = snapshot.tickCounter ?? 0
     return world
-  }
-
-  scheduleEvent(tick: number, pos: Vec): void {
-    const key = pos.toKey()
-    if (!this.scheduledEvents.has(tick)) {
-      this.scheduledEvents.set(tick, new Set())
-    }
-    this.scheduledEvents.get(tick)!.add(key)
   }
 
   setBlock(pos: Vec, block: Block | null): void {
@@ -279,11 +274,7 @@ export class World {
   }
 
   scheduleObserverPulse(observer: Observer): void {
-    const pulse = observer.schedulePulse(this.tickCounter)
-    if (pulse) {
-      this.scheduleEvent(pulse.start, observer.pos)
-      this.scheduleEvent(pulse.end, observer.pos)
-    }
+    observer.schedulePulse()
   }
 
   private processBlockUpdates(): void {
@@ -364,24 +355,18 @@ export class World {
         break
       }
       case "repeater": {
-        const result = block.processScheduledOutput(this.tickCounter)
-        if (result.changed) changed = true
-        if (result.scheduleOffTick) this.scheduleEvent(result.scheduleOffTick, block.pos)
-
-        block.updateInputState()
-        const scheduleTick = block.checkScheduleOutput(this.tickCounter)
-        if (scheduleTick) this.scheduleEvent(scheduleTick, block.pos)
+        changed = block.processScheduled()
+        block.onUpdate()
         break
       }
       case "torch": {
-        changed = block.processScheduledToggle(this.tickCounter)
-        const scheduleTick = block.checkAndScheduleToggle(this.tickCounter)
-        if (scheduleTick) this.scheduleEvent(scheduleTick, block.pos)
+        changed = block.processScheduled()
+        block.onUpdate()
         break
       }
       case "piston":
       case "sticky-piston": {
-        if (block.activationTick !== null && this.tickCounter >= block.activationTick + 2) {
+        if (block.activationTick !== null && this._tick >= block.activationTick + 2) {
           if (!block.extended) {
             block.completeExtension()
           } else {
@@ -391,28 +376,20 @@ export class World {
         break
       }
       case "observer": {
-        if (block.processScheduledPulseStart(this.tickCounter)) changed = true
-        if (block.processScheduledPulseEnd(this.tickCounter)) changed = true
+        changed = block.processScheduled()
         break
       }
       case "button": {
-        changed = block.processScheduledRelease(this.tickCounter)
+        changed = block.processScheduled()
         break
       }
       case "pressure-plate": {
-        const result = block.processScheduledDeactivation(this.tickCounter)
-        if (result.deactivated) changed = true
-        if (result.nextCheckTick) this.scheduleEvent(result.nextCheckTick, block.pos)
+        changed = block.processScheduled()
         break
       }
       case "comparator": {
-        changed = block.processScheduledOutput(this.tickCounter)
-        const { needsSchedule, newOutput } = block.updateInputs()
-        if (needsSchedule) {
-          const scheduleTick = this.tickCounter + 2
-          block.scheduleOutput(scheduleTick, newOutput)
-          this.scheduleEvent(scheduleTick, block.pos)
-        }
+        changed = block.processScheduled()
+        block.onUpdate()
         break
       }
     }
@@ -482,7 +459,7 @@ export class World {
 
     const below = pos.add(Y.neg)
     const belowBlock = this.getBlock(below)
-    if (belowBlock?.type === "torch" && belowBlock.lit) return true
+    if (belowBlock?.type === "torch" && belowBlock.stronglyPowers(pos)) return true
 
     const above = pos.add(Y)
     const aboveBlock = this.getBlock(above)
@@ -500,10 +477,7 @@ export class World {
 
       if (block.type === "dust" && block.signalStrength >= 1 && block.isPointingAt(pos)) return true
 
-      if (block.type === "torch" && block.lit) {
-        const aboveTorch = block.pos.add(Y)
-        if (!aboveTorch.equals(pos) && !block.attachedPos.equals(pos)) return true
-      }
+      if (block.type === "torch" && block.weaklyPowers(pos)) return true
     }
 
     const above = pos.add(Y)

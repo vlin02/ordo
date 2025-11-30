@@ -23,13 +23,13 @@ export type BlockState =
   | { type: "dust"; pos: VecObj; signalStrength: number; shape: "cross" | "dot" }
   | { type: "piston"; pos: VecObj; facing: VecObj; extended: boolean; activationTick: number | null; shortPulse: boolean }
   | { type: "sticky-piston"; pos: VecObj; facing: VecObj; extended: boolean; activationTick: number | null; shortPulse: boolean }
-  | { type: "repeater"; pos: VecObj; facing: VecObj; delay: number; powered: boolean; locked: boolean; outputOn: boolean; scheduledOutputChange: number | null; scheduledOutputState: boolean | null }
-  | { type: "torch"; pos: VecObj; attachedFace: VecObj; lit: boolean; scheduledStateChange: number | null; stateChangeTimes: number[]; burnedOut: boolean }
+  | { type: "repeater"; pos: VecObj; facing: VecObj; delay: number; powered: boolean; locked: boolean; outputOn: boolean; scheduledChange: number | null; scheduledState: boolean | null }
+  | { type: "torch"; pos: VecObj; attachedFace: VecObj; lit: boolean; scheduledToggle: number | null; stateChangeTimes: number[]; burnedOut: boolean }
   | { type: "observer"; pos: VecObj; facing: VecObj; outputOn: boolean; scheduledPulseStart: number | null; scheduledPulseEnd: number | null }
   | { type: "button"; pos: VecObj; attachedFace: VecObj; variant: "stone" | "wood"; pressed: boolean; scheduledRelease: number | null }
   | { type: "redstone-block"; pos: VecObj }
-  | { type: "pressure-plate"; pos: VecObj; variant: "wood" | "stone" | "light-weighted" | "heavy-weighted"; entityCount: number; active: boolean; scheduledDeactivationCheck: number | null }
-  | { type: "comparator"; pos: VecObj; facing: VecObj; mode: "comparison" | "subtraction"; rearSignal: number; leftSignal: number; rightSignal: number; outputSignal: number; scheduledOutputChange: number | null; scheduledOutputSignal: number | null }
+  | { type: "pressure-plate"; pos: VecObj; variant: "wood" | "stone" | "light-weighted" | "heavy-weighted"; entityCount: number; active: boolean; scheduledCheck: number | null }
+  | { type: "comparator"; pos: VecObj; facing: VecObj; mode: "comparison" | "subtraction"; rearSignal: number; leftSignal: number; rightSignal: number; outputSignal: number; scheduledChange: number | null; scheduledOutput: number | null }
 
 export type Snapshot = {
   tickCounter: number
@@ -78,9 +78,9 @@ export function serializeBlock(block: Block): BlockState {
     case "sticky-piston":
       return { type: "sticky-piston", pos, facing: block.facing.toJSON(), extended: block.extended, activationTick: block.activationTick, shortPulse: block.shortPulse }
     case "repeater":
-      return { type: "repeater", pos, facing: block.facing.toJSON(), delay: block.delay, powered: block.powered, locked: block.locked, outputOn: block.outputOn, scheduledOutputChange: block.scheduledOutputChange, scheduledOutputState: block.scheduledOutputState }
+      return { type: "repeater", pos, facing: block.facing.toJSON(), delay: block.delay, powered: block.powered, locked: block.locked, outputOn: block.outputOn, scheduledChange: block.scheduledChange, scheduledState: block.scheduledState }
     case "torch":
-      return { type: "torch", pos, attachedFace: block.attachedFace.toJSON(), lit: block.lit, scheduledStateChange: block.scheduledStateChange, stateChangeTimes: block.stateChangeTimes, burnedOut: block.burnedOut }
+      return { type: "torch", pos, attachedFace: block.attachedFace.toJSON(), lit: block.lit, scheduledToggle: block.scheduledToggle, stateChangeTimes: block.stateChangeTimes, burnedOut: block.burnedOut }
     case "observer":
       return { type: "observer", pos, facing: block.facing.toJSON(), outputOn: block.outputOn, scheduledPulseStart: block.scheduledPulseStart, scheduledPulseEnd: block.scheduledPulseEnd }
     case "button":
@@ -88,9 +88,9 @@ export function serializeBlock(block: Block): BlockState {
     case "redstone-block":
       return { type: "redstone-block", pos }
     case "pressure-plate":
-      return { type: "pressure-plate", pos, variant: block.variant, entityCount: block.entityCount, active: block.active, scheduledDeactivationCheck: block.scheduledDeactivationCheck }
+      return { type: "pressure-plate", pos, variant: block.variant, entityCount: block.entityCount, active: block.active, scheduledCheck: block.scheduledCheck }
     case "comparator":
-      return { type: "comparator", pos, facing: block.facing.toJSON(), mode: block.mode, rearSignal: block.rearSignal, leftSignal: block.leftSignal, rightSignal: block.rightSignal, outputSignal: block.outputSignal, scheduledOutputChange: block.scheduledOutputChange, scheduledOutputSignal: block.scheduledOutputSignal }
+      return { type: "comparator", pos, facing: block.facing.toJSON(), mode: block.mode, rearSignal: block.rearSignal, leftSignal: block.leftSignal, rightSignal: block.rightSignal, outputSignal: block.outputSignal, scheduledChange: block.scheduledChange, scheduledOutput: block.scheduledOutput }
   }
 }
 
@@ -141,8 +141,8 @@ export function deserializeBlock(world: World, state: BlockState): Block {
       block.powered = state.powered
       block.locked = state.locked
       block.outputOn = state.outputOn
-      block.scheduledOutputChange = state.scheduledOutputChange
-      block.scheduledOutputState = state.scheduledOutputState
+      block.scheduledChange = state.scheduledChange
+      block.scheduledState = state.scheduledState
       return block
     }
     case "torch": {
@@ -150,7 +150,7 @@ export function deserializeBlock(world: World, state: BlockState): Block {
       const attachedPos = pos.add(attachedFace)
       const block = new Torch(world, pos, attachedFace, attachedPos)
       block.lit = state.lit
-      block.scheduledStateChange = state.scheduledStateChange
+      block.scheduledToggle = state.scheduledToggle
       block.stateChangeTimes = state.stateChangeTimes
       block.burnedOut = state.burnedOut
       return block
@@ -176,7 +176,7 @@ export function deserializeBlock(world: World, state: BlockState): Block {
       const block = new PressurePlate(world, pos, state.variant)
       block.entityCount = state.entityCount
       block.active = state.active
-      block.scheduledDeactivationCheck = state.scheduledDeactivationCheck
+      block.scheduledCheck = state.scheduledCheck
       return block
     }
     case "comparator": {
@@ -185,8 +185,8 @@ export function deserializeBlock(world: World, state: BlockState): Block {
       block.leftSignal = state.leftSignal
       block.rightSignal = state.rightSignal
       block.outputSignal = state.outputSignal
-      block.scheduledOutputChange = state.scheduledOutputChange
-      block.scheduledOutputSignal = state.scheduledOutputSignal
+      block.scheduledChange = state.scheduledChange
+      block.scheduledOutput = state.scheduledOutput
       return block
     }
   }

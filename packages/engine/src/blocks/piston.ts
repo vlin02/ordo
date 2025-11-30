@@ -34,7 +34,7 @@ export class Piston {
     } else if (!shouldActivate && this.extended && this.activationTick === null) {
       this.scheduleMovement()
     } else if (!shouldActivate && !this.extended && this.activationTick !== null) {
-      if (this.world.tickCounter <= this.activationTick) {
+      if (this.world.currentTick <= this.activationTick) {
         this.shortPulse = true
         this.abortExtension()
       }
@@ -95,12 +95,9 @@ export class Piston {
   }
 
   private scheduleMovement(): void {
-    const startTick = this.world.tickCounter + 1
-    const completeTick = startTick + 2
-
-    this.activationTick = startTick
+    this.activationTick = this.world.currentTick + 1
     this.shortPulse = false
-    this.world.scheduleEvent(completeTick, this.pos)
+    this.world.scheduleUpdate(this.pos, 3)
   }
 
   private abortExtension(): void {

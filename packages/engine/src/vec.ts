@@ -53,6 +53,13 @@ export class Vec {
     return ALL_DIRECTIONS.map(d => this.add(d))
   }
 
+  isAdjacent(other: Vec): boolean {
+    const dx = Math.abs(this.x - other.x)
+    const dy = Math.abs(this.y - other.y)
+    const dz = Math.abs(this.z - other.z)
+    return dx + dy + dz === 1
+  }
+
   perpendiculars(): Vec[] {
     if (this.x !== 0) return [Vec.Z, Vec.Z.neg]
     if (this.z !== 0) return [Vec.X, Vec.X.neg]

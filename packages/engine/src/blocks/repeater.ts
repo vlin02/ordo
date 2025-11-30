@@ -11,8 +11,8 @@ export class Repeater {
   powered: boolean
   locked: boolean
   outputOn: boolean
-  scheduledOutputChange: number | null
-  scheduledOutputState: boolean | null
+  scheduledChange: number | null
+  scheduledState: boolean | null
 
   constructor(world: World, pos: Vec, facing: Vec) {
     this.world = world
@@ -22,8 +22,8 @@ export class Repeater {
     this.powered = false
     this.locked = false
     this.outputOn = false
-    this.scheduledOutputChange = null
-    this.scheduledOutputState = null
+    this.scheduledChange = null
+    this.scheduledState = null
   }
 
   cycleDelay(): void {
@@ -32,65 +32,48 @@ export class Repeater {
     this.delay = delays[(currentIndex + 1) % delays.length]
   }
 
-  scheduleOutput(currentTick: number, state: boolean): number {
-    this.scheduledOutputChange = currentTick + this.delay
-    this.scheduledOutputState = state
-    return this.scheduledOutputChange
-  }
+  onUpdate(): void {
+    this.powered = this.isPowered()
+    this.locked = this.isLocked()
 
-  cancelSchedule(): void {
-    this.scheduledOutputChange = null
-    this.scheduledOutputState = null
-  }
+    if (this.locked) return
 
-  processScheduledOutput(currentTick: number): { changed: boolean; scheduleOffTick?: number } {
-    if (this.scheduledOutputChange === null || currentTick < this.scheduledOutputChange) {
-      return { changed: false }
+    if (this.powered) {
+      if (!this.outputOn && this.scheduledState !== true) {
+        this.scheduledChange = this.world.currentTick + this.delay
+        this.scheduledState = true
+        this.world.scheduleUpdate(this.pos, this.delay)
+      } else if (this.scheduledState === false) {
+        // Cancel pending off
+        this.scheduledChange = null
+        this.scheduledState = null
+      }
+    } else {
+      if (this.outputOn && this.scheduledState !== false) {
+        this.scheduledChange = this.world.currentTick + this.delay
+        this.scheduledState = false
+        this.world.scheduleUpdate(this.pos, this.delay)
+      }
     }
+  }
 
-    const newState = this.scheduledOutputState!
+  processScheduled(): boolean {
+    if (this.scheduledChange === null) return false
+    if (this.world.currentTick < this.scheduledChange) return false
+
+    const newState = this.scheduledState!
     this.outputOn = newState
-    this.scheduledOutputChange = null
-    this.scheduledOutputState = null
+    this.scheduledChange = null
+    this.scheduledState = null
 
     // Pulse extension: if turned on but input is now off, schedule turning off
     if (newState && !this.isPowered() && !this.locked) {
-      const offTick = currentTick + this.delay
-      this.scheduledOutputChange = offTick
-      this.scheduledOutputState = false
-      return { changed: true, scheduleOffTick: offTick }
+      this.scheduledChange = this.world.currentTick + this.delay
+      this.scheduledState = false
+      this.world.scheduleUpdate(this.pos, this.delay)
     }
 
-    return { changed: true }
-  }
-
-  updateInputState(): void {
-    this.powered = this.isPowered()
-    this.locked = this.isLocked()
-  }
-
-  checkScheduleOutput(currentTick: number): number | null {
-    if (this.locked) return null
-
-    if (this.powered) {
-      if (!this.outputOn && this.scheduledOutputState !== true) {
-        const scheduleTick = currentTick + this.delay
-        this.scheduledOutputChange = scheduleTick
-        this.scheduledOutputState = true
-        return scheduleTick
-      } else if (this.scheduledOutputState === false) {
-        this.scheduledOutputChange = null
-        this.scheduledOutputState = null
-      }
-    } else {
-      if (this.outputOn && this.scheduledOutputState !== false) {
-        const scheduleTick = currentTick + this.delay
-        this.scheduledOutputChange = scheduleTick
-        this.scheduledOutputState = false
-        return scheduleTick
-      }
-    }
-    return null
+    return true
   }
 
   shouldDrop(): boolean {

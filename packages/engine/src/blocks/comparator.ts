@@ -14,8 +14,8 @@ export class Comparator {
   leftSignal: number
   rightSignal: number
   outputSignal: number
-  scheduledOutputChange: number | null
-  scheduledOutputSignal: number | null
+  scheduledChange: number | null
+  scheduledOutput: number | null
 
   constructor(world: World, pos: Vec, facing: Vec, mode: ComparatorMode = "comparison") {
     this.world = world
@@ -26,37 +26,35 @@ export class Comparator {
     this.leftSignal = 0
     this.rightSignal = 0
     this.outputSignal = 0
-    this.scheduledOutputChange = null
-    this.scheduledOutputSignal = null
+    this.scheduledChange = null
+    this.scheduledOutput = null
   }
 
   toggleMode(): void {
     this.mode = this.mode === "comparison" ? "subtraction" : "comparison"
   }
 
-  processScheduledOutput(currentTick: number): boolean {
-    if (this.scheduledOutputChange === null || currentTick < this.scheduledOutputChange) {
-      return false
-    }
-    this.outputSignal = this.scheduledOutputSignal!
-    this.scheduledOutputChange = null
-    this.scheduledOutputSignal = null
-    return true
-  }
-
-  updateInputs(): { needsSchedule: boolean; newOutput: number } {
+  onUpdate(): void {
     const { rear, left, right, output } = this.calculateState()
     this.rearSignal = rear
     this.leftSignal = left
     this.rightSignal = right
-    
-    const needsSchedule = output !== this.outputSignal && this.scheduledOutputChange === null
-    return { needsSchedule, newOutput: output }
+
+    if (output !== this.outputSignal && this.scheduledChange === null) {
+      this.scheduledChange = this.world.currentTick + 2
+      this.scheduledOutput = output
+      this.world.scheduleUpdate(this.pos, 2)
+    }
   }
 
-  scheduleOutput(tick: number, signal: number): void {
-    this.scheduledOutputChange = tick
-    this.scheduledOutputSignal = signal
+  processScheduled(): boolean {
+    if (this.scheduledChange === null) return false
+    if (this.world.currentTick < this.scheduledChange) return false
+
+    this.outputSignal = this.scheduledOutput!
+    this.scheduledChange = null
+    this.scheduledOutput = null
+    return true
   }
 
   shouldDrop(): boolean {
@@ -95,4 +93,3 @@ export class Comparator {
     return 0
   }
 }
- 

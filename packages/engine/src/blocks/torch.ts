@@ -9,7 +9,7 @@ export class Torch {
   readonly attachedFace: Vec
   readonly attachedPos: Vec
   lit: boolean
-  scheduledStateChange: number | null
+  scheduledToggle: number | null
   stateChangeTimes: number[]
   burnedOut: boolean
 
@@ -19,37 +19,38 @@ export class Torch {
     this.attachedFace = attachedFace
     this.attachedPos = attachedPos
     this.lit = true
-    this.scheduledStateChange = null
+    this.scheduledToggle = null
     this.stateChangeTimes = []
     this.burnedOut = false
   }
 
-  processScheduledToggle(currentTick: number): boolean {
-    if (this.scheduledStateChange === null || currentTick < this.scheduledStateChange) {
-      return false
-    }
+  onUpdate(): void {
+    if (this.scheduledToggle !== null) return
+    if (this.checkBurnout()) return
+    if (this.lit === this.shouldBeLit()) return
+
+    this.scheduledToggle = this.world.currentTick + 2
+    this.world.scheduleUpdate(this.pos, 2)
+  }
+
+  processScheduled(): boolean {
+    if (this.scheduledToggle === null) return false
+    if (this.world.currentTick < this.scheduledToggle) return false
+
     if (this.burnedOut) {
-      this.scheduledStateChange = null
+      this.scheduledToggle = null
       return false
     }
+
     this.lit = !this.lit
-    this.stateChangeTimes.push(currentTick)
-    this.scheduledStateChange = null
+    this.stateChangeTimes.push(this.world.currentTick)
+    this.scheduledToggle = null
     return true
   }
 
-  checkAndScheduleToggle(currentTick: number): number | null {
-    if (this.scheduledStateChange !== null) return null
-    if (this.checkBurnout(currentTick)) return null
-    if (this.lit === this.shouldBeLit()) return null
-
-    const scheduleTick = currentTick + 2
-    this.scheduledStateChange = scheduleTick
-    return scheduleTick
-  }
-
-  private checkBurnout(currentTick: number): boolean {
+  private checkBurnout(): boolean {
     if (this.burnedOut) return true
+    const currentTick = this.world.currentTick
     this.stateChangeTimes = this.stateChangeTimes.filter(time => currentTick - time < 60)
     if (this.stateChangeTimes.length >= 8) {
       this.lit = false
@@ -76,5 +77,17 @@ export class Torch {
     if (attachedBlock.type === "redstone-block") return false
     if (attachedBlock.type !== "solid" && attachedBlock.type !== "slime") return true
     return !this.world.isWeaklyPowered(this.attachedPos)
+  }
+
+  stronglyPowers(pos: Vec): boolean {
+    if (!this.lit) return false
+    return pos.equals(this.pos.add(Y))
+  }
+
+  weaklyPowers(pos: Vec): boolean {
+    if (!this.lit) return false
+    if (pos.equals(this.pos.add(Y))) return false
+    if (pos.equals(this.attachedPos)) return false
+    return this.pos.isAdjacent(pos)
   }
 }

@@ -11,7 +11,7 @@ export class PressurePlate {
   readonly variant: PressurePlateVariant
   entityCount: number
   active: boolean
-  scheduledDeactivationCheck: number | null
+  scheduledCheck: number | null
 
   constructor(world: World, pos: Vec, variant: PressurePlateVariant = "stone") {
     this.world = world
@@ -19,7 +19,7 @@ export class PressurePlate {
     this.variant = variant
     this.entityCount = 0
     this.active = false
-    this.scheduledDeactivationCheck = null
+    this.scheduledCheck = null
   }
 
   getOutputSignal(): number {
@@ -40,29 +40,30 @@ export class PressurePlate {
     return this.variant === "light-weighted" || this.variant === "heavy-weighted" ? 10 : 20
   }
 
-  activate(currentTick: number): number {
+  activate(): void {
     this.active = true
-    this.scheduledDeactivationCheck = currentTick + this.checkInterval
-    return this.scheduledDeactivationCheck
+    this.scheduledCheck = this.world.currentTick + this.checkInterval
+    this.world.scheduleUpdate(this.pos, this.checkInterval)
   }
 
-  processScheduledDeactivation(currentTick: number): { deactivated: boolean; nextCheckTick?: number } {
-    if (this.scheduledDeactivationCheck === null || currentTick < this.scheduledDeactivationCheck) {
-      return { deactivated: false }
-    }
+  processScheduled(): boolean {
+    if (this.scheduledCheck === null) return false
+    if (this.world.currentTick < this.scheduledCheck) return false
 
     if (this.entityCount === 0 && this.active) {
       this.active = false
-      this.scheduledDeactivationCheck = null
-      return { deactivated: true }
+      this.scheduledCheck = null
+      return true
     }
 
     if (this.entityCount > 0) {
-      this.scheduledDeactivationCheck = currentTick + this.checkInterval
-      return { deactivated: false, nextCheckTick: this.scheduledDeactivationCheck }
+      this.scheduledCheck = this.world.currentTick + this.checkInterval
+      this.world.scheduleUpdate(this.pos, this.checkInterval)
+      return false
     }
 
-    return { deactivated: false }
+    this.scheduledCheck = null
+    return false
   }
 
   shouldDrop(): boolean {

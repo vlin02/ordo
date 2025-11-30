@@ -24,16 +24,18 @@ export class Button {
     this.scheduledRelease = null
   }
 
-  press(currentTick: number): number | null {
-    if (this.pressed) return null
+  press(): void {
+    if (this.pressed) return
     this.pressed = true
     const duration = this.variant === "wood" ? 30 : 20
-    this.scheduledRelease = currentTick + duration
-    return this.scheduledRelease
+    this.scheduledRelease = this.world.currentTick + duration
+    this.world.scheduleUpdate(this.pos, duration)
   }
 
-  processScheduledRelease(currentTick: number): boolean {
-    if (this.scheduledRelease === null || currentTick < this.scheduledRelease) return false
+  processScheduled(): boolean {
+    if (this.scheduledRelease === null) return false
+    if (this.world.currentTick < this.scheduledRelease) return false
+    
     this.pressed = false
     this.scheduledRelease = null
     return true

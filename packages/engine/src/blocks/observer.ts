@@ -20,24 +20,30 @@ export class Observer {
     this.scheduledPulseEnd = null
   }
 
-  schedulePulse(currentTick: number): { start: number; end: number } | null {
-    if (this.scheduledPulseStart !== null || this.scheduledPulseEnd !== null) return null
-    this.scheduledPulseStart = currentTick + 2
-    this.scheduledPulseEnd = this.scheduledPulseStart + 2
-    return { start: this.scheduledPulseStart, end: this.scheduledPulseEnd }
+  schedulePulse(): void {
+    if (this.scheduledPulseStart !== null || this.scheduledPulseEnd !== null) return
+    const tick = this.world.currentTick
+    this.scheduledPulseStart = tick + 2
+    this.scheduledPulseEnd = tick + 4
+    this.world.scheduleUpdate(this.pos, 2)
+    this.world.scheduleUpdate(this.pos, 4)
   }
 
-  processScheduledPulseStart(currentTick: number): boolean {
-    if (this.scheduledPulseStart === null || currentTick < this.scheduledPulseStart) return false
-    this.outputOn = true
-    this.scheduledPulseStart = null
-    return true
-  }
+  processScheduled(): boolean {
+    const tick = this.world.currentTick
 
-  processScheduledPulseEnd(currentTick: number): boolean {
-    if (this.scheduledPulseEnd === null || currentTick < this.scheduledPulseEnd) return false
-    this.outputOn = false
-    this.scheduledPulseEnd = null
-    return true
+    if (this.scheduledPulseStart !== null && tick >= this.scheduledPulseStart) {
+      this.outputOn = true
+      this.scheduledPulseStart = null
+      return true
+    }
+
+    if (this.scheduledPulseEnd !== null && tick >= this.scheduledPulseEnd) {
+      this.outputOn = false
+      this.scheduledPulseEnd = null
+      return true
+    }
+
+    return false
   }
 }
