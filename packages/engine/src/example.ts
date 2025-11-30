@@ -37,6 +37,5 @@ const player = new Player(world)
 const assembler = new Assembler(player)
 assembler.apply(blocks)
 
-// Show what powers the dust at (1,1,4)
-const circuit = world.getCircuit()
-console.log(circuit.printTo(new Vec(1, 1, 4)))
+// Example world assembled
+console.log("World has", world.getAllBlocks().length, "blocks")

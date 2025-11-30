@@ -37,9 +37,14 @@ export type BlockDef =
 
 export type Schematic = (BlockDef | null)[][][]
 
+export interface PlacementFailure {
+  pos: Vec
+  reason: string
+}
+
 export interface ApplyResult {
   blocks: Map<BlockDef, Block>
-  failed: Vec[]
+  failed: PlacementFailure[]
 }
 
 export class Assembler {
@@ -53,7 +58,7 @@ export class Assembler {
     this.validate(schematic)
 
     const blocks = new Map<BlockDef, Block>()
-    const failed: Vec[] = []
+    const failed: PlacementFailure[] = []
     const height = schematic.length
     const width = schematic[0]?.length ?? 0
     const length = schematic[0]?.[0]?.length ?? 0
@@ -65,11 +70,11 @@ export class Assembler {
           if (!def) continue
 
           const pos = new Vec(x, y, z).add(offset)
-          const block = this.placeBlock(def, pos)
-          if (block) {
-            blocks.set(def, block)
+          const result = this.placeBlock(def, pos)
+          if (result.block) {
+            blocks.set(def, result.block)
           } else {
-            failed.push(pos)
+            failed.push({ pos, reason: result.error ?? "Unknown error" })
           }
         }
       }
@@ -96,40 +101,55 @@ export class Assembler {
     }
   }
 
-  private placeBlock(def: BlockDef, pos: Vec): Block | null {
-    if (!def) return null
+  private placeBlock(def: BlockDef, pos: Vec): { block: Block | null; error?: string } {
+    if (!def) return { block: null }
 
     try {
+      let block: Block
       switch (def.type) {
         case "solid":
-          return this.player.solid(pos)
+          block = this.player.solid(pos)
+          break
         case "slime":
-          return this.player.slime(pos)
+          block = this.player.slime(pos)
+          break
         case "redstone-block":
-          return this.player.redstoneBlock(pos)
+          block = this.player.redstoneBlock(pos)
+          break
         case "dust":
-          return this.player.dust(pos)
+          block = this.player.dust(pos)
+          break
         case "lever":
-          return this.player.lever(pos, def.face)
+          block = this.player.lever(pos, def.face)
+          break
         case "button":
-          return this.player.button(pos, def.face, { variant: def.variant })
+          block = this.player.button(pos, def.face, { variant: def.variant })
+          break
         case "torch":
-          return this.player.torch(pos, def.face)
+          block = this.player.torch(pos, def.face)
+          break
         case "repeater":
-          return this.player.repeater(pos, def.facing, { delay: def.delay })
+          block = this.player.repeater(pos, def.facing, { delay: def.delay })
+          break
         case "comparator":
-          return this.player.comparator(pos, def.facing, { mode: def.mode })
+          block = this.player.comparator(pos, def.facing, { mode: def.mode })
+          break
         case "piston":
-          return this.player.piston(pos, def.facing)
+          block = this.player.piston(pos, def.facing)
+          break
         case "sticky-piston":
-          return this.player.stickyPiston(pos, def.facing)
+          block = this.player.stickyPiston(pos, def.facing)
+          break
         case "observer":
-          return this.player.observer(pos, def.facing)
+          block = this.player.observer(pos, def.facing)
+          break
         case "pressure-plate":
-          return this.player.pressurePlate(pos, { variant: def.variant })
+          block = this.player.pressurePlate(pos, { variant: def.variant })
+          break
       }
-    } catch {
-      return null
+      return { block }
+    } catch (e) {
+      return { block: null, error: e instanceof Error ? e.message : String(e) }
     }
   }
 }

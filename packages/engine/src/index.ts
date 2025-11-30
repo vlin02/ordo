@@ -310,7 +310,6 @@ export { PressurePlate, type PressurePlateVariant } from "./blocks/pressure-plat
 export { Comparator, type ComparatorMode } from "./blocks/comparator.js"
 
 export { Vec, X, Y, Z, HORIZONTALS, ALL_DIRECTIONS, type VecObj } from "./vec.js"
-export { Circuit, trace, type Node, type Edge, type EdgeType } from "./kit/circuit.js"
 export { Slice, blockSymbol, parseSymbol, PATTERNS, type ParsedSymbol } from "./kit/grid.js"
 export {
   Assembler,
@@ -318,6 +317,7 @@ export {
   type BlockDef,
   type Schematic,
   type ApplyResult,
+  type PlacementFailure,
 } from "./kit/assembler.js"
 export { Agent } from "./kit/agent.js"
 

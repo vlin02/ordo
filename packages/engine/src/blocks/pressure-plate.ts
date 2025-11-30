@@ -35,9 +35,13 @@ export class PressurePlate {
     }
   }
 
+  private get checkInterval(): number {
+    return this.variant === "light-weighted" || this.variant === "heavy-weighted" ? 10 : 20
+  }
+
   activate(currentTick: number): number {
     this.active = true
-    this.scheduledDeactivationCheck = currentTick + 20
+    this.scheduledDeactivationCheck = currentTick + this.checkInterval
     return this.scheduledDeactivationCheck
   }
 
@@ -53,7 +57,7 @@ export class PressurePlate {
     }
 
     if (this.entityCount > 0) {
-      this.scheduledDeactivationCheck = currentTick + 20
+      this.scheduledDeactivationCheck = currentTick + this.checkInterval
       return { deactivated: false, nextCheckTick: this.scheduledDeactivationCheck }
     }
 

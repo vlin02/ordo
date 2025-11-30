@@ -12,8 +12,7 @@
 import { World } from "../world.js"
 import { Player } from "../player.js"
 import { Vec } from "../vec.js"
-import { Assembler, type Schematic, type BlockDef } from "./assembler.js"
-import { trace } from "./circuit.js"
+import { Assembler, type Schematic, type BlockDef, type PlacementFailure } from "./assembler.js"
 import { Slice } from "./grid.js"
 import type { Block } from "../blocks/index.js"
 import type { Lever } from "../blocks/lever.js"
@@ -42,7 +41,7 @@ export class Agent {
     this.#slice = new Slice(this.#world)
   }
 
-  assemble(schematic: Schematic, offset: Vec = Vec.ZERO): { failed: Vec[] } {
+  assemble(schematic: Schematic, offset: Vec = Vec.ZERO): { failed: PlacementFailure[] } {
     if (this.#assembled) {
       throw new Error("Assembly already complete. Cannot place more blocks.")
     }
@@ -53,6 +52,14 @@ export class Agent {
     for (const [def, block] of result.blocks) {
       this.#blocks.set(def, block)
     }
+
+    if (result.failed.length > 0) {
+      console.warn(`[Agent] ${result.failed.length} block(s) failed to place:`)
+      for (const { pos, reason } of result.failed) {
+        console.warn(`  - ${pos.toKey()}: ${reason}`)
+      }
+    }
+
     return { failed: result.failed }
   }
 
@@ -113,7 +120,4 @@ export class Agent {
     return slices.join("\n\n")
   }
 
-  showCircuit(opts: { showInactive?: boolean } = {}): string {
-    return trace(this.#world).print(opts)
-  }
 }

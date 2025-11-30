@@ -2,16 +2,28 @@
 alwaysApply: true
 ---
 
-You are building a game-accurate engine visualizer, and LLM framework for minecraft 1.21
+You are building a game-accurate engine, visualizer, and LLM framework for minecraft 1.21
+
+Unless otherwise instructed, test files should:
+primarily be e2e rather than unit tests (test user/interface-facing behavior)
+happy path should cover large swathts of spec.md while keeping the scenario simple
+add additional tests for edge cases as NECESSARY. Aim to get full coverage of the remaining logic in spec.md not covered by the happy path WHILE minimizing the number and complexity of these additional tests
 
 packages/engine
+
 The engine is to faithfully and concisely implement the spec found in spec.md
 We are not optimizing for efficiency but rather simplicity and conciseness with reasonable performance
 
-src/engine.test.ts
-happy path should cover large swathts of spec.md while keeping the scenario simple
-add additional tests for edge cases as NECESSARY. Aim to get coverage of the remaining logic in spec.md not covered by the happy path WHILE minimizing the number and complexity of these additional tests
+world.ts - the core class for performing updates. World ENABLES all block behavior, but does not validate
+player.ts - a safe wrapper on top of world to perform spec-compliant SAFE actions for a single player. Performs validation
 
-keywords:
-productionize - evaluate adherence + FULL coverage of tests and impl of engine against the spec.md.
-cleanup <symbol> - evaluate and any obvious ways to simplify, redundant logic, extract without coupling (only suggest don't execute)
+spec:
+**Coverage**: Redstone behavior, visual behavior (ex. redstone dust pattern), physical behavior (gravity), player interaction validation (ex. block placement).
+**Target**: Minecraft 1.21 Java Edition game-accurate engine.
+**Principles**:
+
+- Conciseness
+- Unambiguous — only one interpretation
+- Implementation independent
+- Complete — covers all scope mentioned
+- Accurate — faithful to 1.21

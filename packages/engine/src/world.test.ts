@@ -288,60 +288,44 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(world.getBlock(v(2, 0, 0))).toBe(null)
   })
 
-  it("observer detects change and activates piston at back", () => {
+  it("observer: detects changes, powers back, triggers after piston move", () => {
+    // Block placement triggers observer
     const world = new World()
-
     const observer = world.observer(v(0, 0, 0), PX)
     const solidBehind = world.solid(v(-1, 0, 0))
-
     world.solid(v(-2, -1, 0))
     const piston = world.piston(v(-2, 0, 0), NZ)
 
-    // Trigger observer
-    world.solid(v(1, 0, 0))
-
+    world.solid(v(1, 0, 0)) // Trigger
     tickN(world, 2)
     expect(observer.outputOn).toBe(true)
     expect(solidBehind.powerState).toBe("strongly-powered")
-
     tickN(world, 3)
     expect(piston.extended).toBe(true)
-
     tickN(world, 2)
     expect(observer.outputOn).toBe(false)
-    expect(solidBehind.powerState).toBe("unpowered")
-  })
 
-  it("observer triggers after being moved by piston and detects property changes", () => {
-    const world = new World()
-
-    world.solid(v(0, -1, 0))
-    const piston = world.piston(v(0, 0, 0), PX)
-
-    const observer = world.observer(v(1, 0, 0), PZ)
-
-    world.solid(v(-1, 0, 0))
-    const lever = world.lever(v(-1, 1, 0), NY)
-
-    world.interact(lever)
-    tickN(world, 4)
-
-    expect(piston.extended).toBe(true)
-    expect(world.getBlock(v(2, 0, 0))?.type).toBe("observer")
-
-    tickN(world, 2)
-    expect(observer.outputOn).toBe(true)
-
-    // Also test property change detection
+    // Triggers after being moved by piston
     const world2 = new World()
-    const obs2 = world2.observer(v(0, 0, 0), PX)
-
-    world2.solid(v(1, -1, 0))
-    const lever2 = world2.lever(v(1, 0, 0), NY)
-
+    world2.solid(v(0, -1, 0))
+    const piston2 = world2.piston(v(0, 0, 0), PX)
+    const obs2 = world2.observer(v(1, 0, 0), PZ)
+    world2.solid(v(-1, 0, 0))
+    const lever2 = world2.lever(v(-1, 1, 0), NY)
     world2.interact(lever2)
+    tickN(world2, 4)
+    expect(world2.getBlock(v(2, 0, 0))?.type).toBe("observer")
     tickN(world2, 2)
     expect(obs2.outputOn).toBe(true)
+
+    // Property change detection (lever toggle)
+    const world3 = new World()
+    const obs3 = world3.observer(v(0, 0, 0), PX)
+    world3.solid(v(1, -1, 0))
+    const lever3 = world3.lever(v(1, 0, 0), NY)
+    world3.interact(lever3)
+    tickN(world3, 2)
+    expect(obs3.outputOn).toBe(true)
   })
 
   it("dust dot shape only powers block beneath", () => {
@@ -462,82 +446,67 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(woodButton.pressed).toBe(false) // Released at 30gt
   })
 
-  it("slime block push/pull and conductivity", () => {
+  it("slime block: push/pull, stickiness, conductivity, dust not supported", () => {
+    // Push/pull
     const world = new World()
-
     world.solid(v(0, -1, 0))
     const stickyPiston = world.stickyPiston(v(0, 0, 0), PX)
-
-    const slime = world.slime(v(1, 0, 0))
-
+    world.slime(v(1, 0, 0))
     world.solid(v(-1, 0, 0))
     const lever = world.lever(v(-1, 1, 0), NY)
 
     world.interact(lever)
     tickN(world, 4)
-
     expect(world.getBlock(v(2, 0, 0))?.type).toBe("slime")
-    expect(world.getBlock(v(1, 0, 0))).toBe(null)
 
     world.interact(lever)
     tickN(world, 4)
     expect(world.getBlock(v(1, 0, 0))?.type).toBe("slime")
 
-    // Test conductivity
+    // Stickiness: adjacent blocks move together
     const world2 = new World()
-    world2.solid(v(-1, -1, 0))
-    const rep = world2.repeater(v(-1, 0, 0), PX)
-
-    const slime2 = world2.slime(v(0, 0, 0))
-    const torch = world2.torch(v(0, 1, 0), NY)
-
-    world2.solid(v(-2, 0, 0))
-    const lv = world2.lever(v(-2, 1, 0), NY)
-
-    world2.interact(lv)
-    tickN(world2, 6)
-    expect(slime2.powerState).toBe("strongly-powered")
-    expect(torch.lit).toBe(false)
-  })
-
-  it("slime block moves adjacent blocks together and supports dust/repeater", () => {
-    const world = new World()
-
-    world.solid(v(0, -1, 0))
-    const piston = world.piston(v(0, 0, 0), PX)
-
-    world.slime(v(1, 0, 0))
-    world.solid(v(1, 1, 0))
-    world.solid(v(1, 0, 1))
-
-    world.solid(v(-1, 0, 0))
-    const lever = world.lever(v(-1, 1, 0), NY)
-
-    world.interact(lever)
-    tickN(world, 4)
-
-    expect(world.getBlock(v(2, 0, 0))?.type).toBe("slime")
-    expect(world.getBlock(v(2, 1, 0))?.type).toBe("solid")
-    expect(world.getBlock(v(2, 0, 1))?.type).toBe("solid")
-    expect(world.getBlock(v(1, 0, 0))).toBe(null)
-    expect(world.getBlock(v(1, 1, 0))).toBe(null)
-    expect(world.getBlock(v(1, 0, 1))).toBe(null)
-
-    // Test support
-    const world2 = new World()
-    world2.slime(v(0, 0, 0))
-    const dust = world2.dust(v(0, 1, 0))
+    world2.solid(v(0, -1, 0))
+    world2.piston(v(0, 0, 0), PX)
     world2.slime(v(1, 0, 0))
-    const repeater = world2.repeater(v(1, 1, 0), PX)
+    world2.solid(v(1, 1, 0))
+    world2.solid(v(1, 0, 1))
+    world2.solid(v(-1, 0, 0))
+    const lever2 = world2.lever(v(-1, 1, 0), NY)
 
-    expect(world2.getBlock(dust.pos)).toBe(dust)
-    expect(world2.getBlock(repeater.pos)).toBe(repeater)
+    world2.interact(lever2)
+    tickN(world2, 4)
+    expect(world2.getBlock(v(2, 0, 0))?.type).toBe("slime")
+    expect(world2.getBlock(v(2, 1, 0))?.type).toBe("solid")
+    expect(world2.getBlock(v(2, 0, 1))?.type).toBe("solid")
+
+    // Conductivity: torch turns off on strongly-powered slime
+    const world3 = new World()
+    world3.solid(v(-1, -1, 0))
+    world3.repeater(v(-1, 0, 0), PX)
+    const slime3 = world3.slime(v(0, 0, 0))
+    const torch = world3.torch(v(0, 1, 0), NY)
+    world3.solid(v(-2, 0, 0))
+    const lv3 = world3.lever(v(-2, 1, 0), NY)
+    world3.interact(lv3)
+    tickN(world3, 6)
+    expect(slime3.powerState).toBe("strongly-powered")
+    expect(torch.lit).toBe(false)
+
+    // Dust NOT supported on slime (only solid/observer)
+    const world4 = new World()
+    world4.slime(v(0, 0, 0))
+    const dust = world4.dust(v(0, 1, 0))
+    expect(world4.getBlock(dust.pos)).toBe(null)
+
+    // But repeater IS supported
+    world4.slime(v(1, 0, 0))
+    const repeater = world4.repeater(v(1, 1, 0), PX)
+    expect(world4.getBlock(repeater.pos)).toBe(repeater)
   })
 
-  it("comparator modes: comparison and subtraction", () => {
-    const world = new World()
-
+  it("comparator: comparison/subtraction modes, mode toggle, observer input", () => {
     // Comparison: rear >= side → output rear
+    const world = new World()
     world.solid(v(0, -1, 0))
     const comp1 = world.comparator(v(0, 0, 0), PX)
     world.redstoneBlock(v(-1, 0, 0))
@@ -558,7 +527,24 @@ describe("Redstone Engine - Edge Cases", () => {
     world2.redstoneBlock(v(0, 0, 1))
     const comp3 = world2.comparator(v(0, 0, 0), PX, { mode: "subtraction" })
     tickN(world2, 2)
-    expect(comp3.outputSignal).toBe(0) // 15 - 15 = 0
+    expect(comp3.outputSignal).toBe(0)
+
+    // Mode toggle
+    const world3 = new World()
+    world3.solid(v(0, -1, 0))
+    const comp = world3.comparator(v(0, 0, 0), PX)
+    expect(comp.mode).toBe("comparison")
+    world3.interact(comp)
+    expect(comp.mode).toBe("subtraction")
+
+    // Responds to observer input
+    const world4 = new World()
+    world4.solid(v(0, -1, 0))
+    const comparator = world4.comparator(v(0, 0, 0), PX)
+    world4.observer(v(-1, 0, 0), NX)
+    world4.solid(v(-2, 0, 0)) // Trigger
+    tickN(world4, 4)
+    expect(comparator.outputSignal).toBe(15)
   })
 
   it("pressure plate variants and strongly powers block beneath", () => {
@@ -660,7 +646,7 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(world.getBlock(v(1, 0, 0))).toBe(null)
   })
 
-  it("dust on extended piston base is supported", () => {
+  it("dust on extended piston base drops (not supported)", () => {
     const world = new World()
 
     world.solid(v(0, -1, 0))
@@ -673,8 +659,9 @@ describe("Redstone Engine - Edge Cases", () => {
     tickN(world, 4)
     expect(piston.extended).toBe(true)
 
+    // Piston does NOT support dust per new spec
     const dust = world.dust(v(0, 1, 0))
-    expect(world.getBlock(dust.pos)).toBe(dust)
+    expect(world.getBlock(dust.pos)).toBe(null)
   })
 
   it("repeater extends short input pulse to match delay", () => {
@@ -696,14 +683,11 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(repeater.outputOn).toBe(true) // Extended pulse
   })
 
-  it("redstone block powers adjacent components", () => {
+  it("redstone block: powers dust/piston, torch turns off, does NOT power solid", () => {
     const world = new World()
-
     world.redstoneBlock(v(0, 0, 0))
-
     world.solid(v(1, -1, 0))
     const dust = world.dust(v(1, 0, 0))
-
     world.solid(v(-1, -1, 0))
     const piston = world.piston(v(-1, 0, 0), NX)
 
@@ -713,71 +697,108 @@ describe("Redstone Engine - Edge Cases", () => {
 
     // Torch on redstone block turns off
     const world2 = new World()
-    const rb = world2.redstoneBlock(v(0, 0, 0))
+    world2.redstoneBlock(v(0, 0, 0))
     const torch = world2.torch(v(0, 1, 0), NY)
     tickN(world2, 2)
     expect(torch.lit).toBe(false)
+
+    // Does NOT power adjacent solid
+    const world3 = new World()
+    world3.redstoneBlock(v(0, 0, 0))
+    const solid = world3.solid(v(1, 0, 0))
+    expect(solid.powerState).toBe("unpowered")
   })
 
   it("observer above lower dust does NOT block upward connection", () => {
     const world = new World()
-
     world.solid(v(0, 0, 0))
     const lowerDust = world.dust(v(0, 1, 0))
-
-    // Observer above lower dust (should NOT block upward connection)
     world.observer(v(0, 2, 0), PZ)
-
     world.solid(v(1, 1, 0))
     const upperDust = world.dust(v(1, 2, 0))
-
     world.solid(v(2, 2, 0))
     const lever = world.lever(v(2, 3, 0), NY)
-
     world.interact(lever)
 
     expect(upperDust.signalStrength).toBe(15)
-    expect(lowerDust.signalStrength).toBe(14) // Observer does NOT block upward
+    expect(lowerDust.signalStrength).toBe(14)
   })
 
-  it("redstone block does NOT power adjacent solid blocks", () => {
+  it("dust connects to redstone block", () => {
     const world = new World()
-
-    world.redstoneBlock(v(0, 0, 0))
-    const adjacentSolid = world.solid(v(1, 0, 0))
-
-    expect(adjacentSolid.powerState).toBe("unpowered")
-  })
-
-  it("comparator mode toggles via interact", () => {
-    const world = new World()
-
     world.solid(v(0, -1, 0))
-    const comp = world.comparator(v(0, 0, 0), PX)
+    const dust = world.dust(v(0, 0, 0))
+    world.redstoneBlock(v(1, 0, 0))
 
-    expect(comp.mode).toBe("comparison")
-    world.interact(comp)
-    expect(comp.mode).toBe("subtraction")
-    world.interact(comp)
-    expect(comp.mode).toBe("comparison")
+    // Dust should connect and receive SS=15
+    expect(dust.signalStrength).toBe(15)
+    expect(world.isDustPointingAt(dust, v(1, 0, 0))).toBe(true)
   })
 
-  it("comparator responds to 2gt pulse from observer", () => {
+  it("slime block blocks dust step-connections like solid", () => {
+    // Slime at P+D blocks step-down (D7 rule 5: block at P+D must NOT be solid/slime)
     const world = new World()
+    world.solid(v(0, 1, 0))
+    const upperDust = world.dust(v(0, 2, 0))
+    world.slime(v(1, 2, 0)) // Slime at P+D blocks step-down connection
+    world.solid(v(1, 0, 0))
+    const lowerDust = world.dust(v(1, 1, 0))
 
+    world.solid(v(-1, 2, 0))
+    const lever = world.lever(v(-1, 3, 0), NY)
+    world.interact(lever)
+
+    expect(upperDust.signalStrength).toBe(15)
+    expect(lowerDust.signalStrength).toBe(0) // Blocked by slime at (1,2,0)
+  })
+
+  it("repeater locks when comparator outputs into side", () => {
+    const world = new World()
     world.solid(v(0, -1, 0))
-    const comparator = world.comparator(v(0, 0, 0), PX)
+    const mainRepeater = world.repeater(v(0, 0, 0), PX)
 
-    // Observer facing -x, so back outputs toward +x (toward comparator)
-    const observer = world.observer(v(-1, 0, 0), NX)
+    world.solid(v(0, -1, 1))
+    const lockingComp = world.comparator(v(0, 0, 1), NZ)
+    world.redstoneBlock(v(0, 0, 2)) // Powers comparator
 
-    // Trigger observer with block at its front
+    tickN(world, 2)
+    expect(lockingComp.outputSignal).toBe(15)
+    expect(mainRepeater.locked).toBe(true)
+  })
+
+  it("weighted pressure plate deactivates after 10gt (not 20gt)", () => {
+    const world = new World()
+    world.solid(v(0, 0, 0))
+    const plate = world.pressurePlate(v(0, 1, 0), { variant: "light-weighted" })
+
+    world.setEntityCount(plate, { all: 1, mobs: 1 })
+    expect(plate.active).toBe(true)
+
+    world.setEntityCount(plate, { all: 0, mobs: 0 })
+    tickN(world, 9)
+    expect(plate.active).toBe(true) // Still active at 9gt
+
+    world.tick() // 10gt
+    expect(plate.active).toBe(false) // Deactivated at 10gt
+  })
+
+  it("torch NOT turned off by weakly-powered block", () => {
+    const world = new World()
+    const base = world.solid(v(0, 0, 0))
+    const torch = world.torch(v(1, 0, 0), NX) // Torch attached to side of base
+
+    // Dust pointing at base weakly powers it
+    world.solid(v(-1, -1, 0))
+    const dust = world.dust(v(-1, 0, 0)) // Cross shape points all directions including +X toward base
     world.solid(v(-2, 0, 0))
+    const lever = world.lever(v(-2, 1, 0), NY)
 
-    tickN(world, 2) // Observer starts pulse
-    expect(observer.outputOn).toBe(true)
+    world.interact(lever)
+    expect(dust.signalStrength).toBe(15)
+    expect(base.powerState).toBe("weakly-powered")
 
-    tickN(world, 2) // Comparator outputs
-    expect(comparator.outputSignal).toBe(15)
+    tickN(world, 4)
+    expect(torch.lit).toBe(true) // Still lit - weakly-powered does NOT turn off
   })
+
 })

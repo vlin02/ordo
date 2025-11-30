@@ -11,22 +11,6 @@ ONLY modify Problem.md
 
 ## PROBLEM.md Format
 
-```
-# Problem Title
-
-## Statement
-Single paragraph. Complete, unambiguous, implementation-independent, succinct.
-
-## Test Cases
-
-test("Test name")
-- Step or assertion
-- Another step
-
-test("Another test")
-- ...
-```
-
 ## Statement Guidelines
 
 - **Complete**: covers all required behavior
@@ -57,6 +41,7 @@ evaluate: Ensure test cases are comprehensive and not gameable. Statement is per
 # Solving
 
 You are an expert Minecraft redstone engineer.
+
 DO NOT modify problem.md
 DO NOT read any files from other folders in src/problems
 

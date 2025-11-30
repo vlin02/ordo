@@ -13,7 +13,6 @@ import { PressurePlate, type PressurePlateVariant } from "./blocks/pressure-plat
 import { Comparator, type ComparatorMode } from "./blocks/comparator.js"
 import type { Block } from "./blocks/index.js"
 import { type Snapshot, serializeBlock, deserializeBlock } from "./snapshot.js"
-import { Circuit, trace } from "./kit/circuit.js"
 
 export class World {
   private grid: Map<string, Block>
@@ -164,9 +163,7 @@ export class World {
     plate.entityCount = newCount
 
     if (plate.entityCount > 0 && !wasActive) {
-      const checkTick = this.tickCounter + 20
-      plate.active = true
-      plate.scheduledDeactivationCheck = checkTick
+      const checkTick = plate.activate(this.tickCounter)
       this.notifyObserversAt(plate.pos)
       this.triggerBlockUpdate(plate.pos)
       this.scheduleEvent(checkTick, plate.pos)
@@ -310,6 +307,12 @@ export class World {
 
     for (const adjPos of pos.adjacents()) {
       this.updateQueue.add(adjPos.toKey())
+    }
+
+    // Quasi-connectivity: also update all positions adjacent to Y+1
+    const abovePos = pos.add(Y)
+    for (const adjAbove of abovePos.adjacents()) {
+      this.updateQueue.add(adjAbove.toKey())
     }
   }
 
@@ -468,14 +471,11 @@ export class World {
           block.scheduledDeactivationCheck !== null &&
           this.tickCounter >= block.scheduledDeactivationCheck
         ) {
-          if (block.entityCount === 0 && block.active) {
-            block.active = false
-            block.scheduledDeactivationCheck = null
+          const result = block.tryCheckDeactivation(this.tickCounter)
+          if (result.deactivated) {
             changed = true
-          } else if (block.entityCount > 0) {
-            const nextCheckTick = this.tickCounter + 20
-            block.scheduledDeactivationCheck = nextCheckTick
-            this.scheduleEvent(nextCheckTick, block.pos)
+          } else if (result.nextCheckTick !== undefined) {
+            this.scheduleEvent(result.nextCheckTick, block.pos)
           }
         }
         break
@@ -705,7 +705,7 @@ export class World {
       const adjPos = pos.add(dir)
       const adjBlock = this.getBlock(adjPos)
 
-      if (adjBlock?.type === "dust" || adjBlock?.type === "lever" || adjBlock?.type === "torch") {
+      if (adjBlock?.type === "dust" || adjBlock?.type === "lever" || adjBlock?.type === "redstone-block" || adjBlock?.type === "torch") {
         connections.push(adjPos)
         continue
       }
@@ -736,29 +736,29 @@ export class World {
         }
       }
 
-      // Step-down: dust below adjacent air position
-      if (!adjBlock || adjBlock.type !== "solid") {
+      // Step-down: dust below adjacent position (if not blocked by solid/slime)
+      if (!adjBlock || (adjBlock.type !== "solid" && adjBlock.type !== "slime")) {
         const belowPos = adjPos.add(Y.neg)
         const belowBlock = this.getBlock(belowPos)
         if (belowBlock?.type === "dust") {
           const aboveBelow = belowPos.add(Y)
           const aboveBelowBlock = this.getBlock(aboveBelow)
           const blocksDownward =
-            aboveBelowBlock?.type === "solid" || aboveBelowBlock?.type === "observer"
+            aboveBelowBlock?.type === "solid" || aboveBelowBlock?.type === "slime"
           if (!blocksDownward) {
             connections.push(belowPos)
           }
         }
       }
 
-      // Step-up: dust on top of adjacent solid
-      if (adjBlock?.type === "solid") {
+      // Step-up: dust on top of adjacent solid/slime (if not blocked above)
+      if (adjBlock?.type === "solid" || adjBlock?.type === "slime") {
         const aboveAdjPos = adjPos.add(Y)
         const aboveAdjBlock = this.getBlock(aboveAdjPos)
         if (aboveAdjBlock?.type === "dust") {
           const aboveCurrentDust = pos.add(Y)
           const aboveCurrentBlock = this.getBlock(aboveCurrentDust)
-          const blocksUpward = aboveCurrentBlock?.type === "solid"
+          const blocksUpward = aboveCurrentBlock?.type === "solid" || aboveCurrentBlock?.type === "slime"
           if (!blocksUpward) {
             connections.push(aboveAdjPos)
           }
@@ -794,6 +794,13 @@ export class World {
       if (sideBlock?.type === "repeater") {
         const sideFront = sideBlock.pos.add(sideBlock.facing)
         if (sideFront.equals(repeater.pos) && sideBlock.outputOn) {
+          return true
+        }
+      }
+
+      if (sideBlock?.type === "comparator") {
+        const sideFront = sideBlock.pos.add(sideBlock.facing)
+        if (sideFront.equals(repeater.pos) && sideBlock.outputSignal > 0) {
           return true
         }
       }
@@ -863,10 +870,6 @@ export class World {
     if (block.type === "redstone-block") return 15
 
     return this.outputsTo(block, comparatorPos)
-  }
-
-  getCircuit(): Circuit {
-    return trace(this)
   }
 
   isBlockMovable(block: Block): boolean {
