@@ -3,6 +3,7 @@ import type { World } from "../world.js"
 
 export class Torch {
   readonly type = "torch" as const
+  readonly movability = "destroy" as const
   readonly world: World
   readonly pos: Vec
   readonly attachedFace: Vec
@@ -23,13 +24,10 @@ export class Torch {
     this.burnedOut = false
   }
 
-  scheduleToggle(currentTick: number): number {
-    this.scheduledStateChange = currentTick + 2
-    return this.scheduledStateChange
-  }
-
-  tryConsumeToggle(currentTick: number): boolean {
-    if (this.scheduledStateChange === null || currentTick < this.scheduledStateChange) return false
+  processScheduledToggle(currentTick: number): boolean {
+    if (this.scheduledStateChange === null || currentTick < this.scheduledStateChange) {
+      return false
+    }
     if (this.burnedOut) {
       this.scheduledStateChange = null
       return false
@@ -40,7 +38,17 @@ export class Torch {
     return true
   }
 
-  isBurnedOut(currentTick: number): boolean {
+  checkAndScheduleToggle(currentTick: number): number | null {
+    if (this.scheduledStateChange !== null) return null
+    if (this.checkBurnout(currentTick)) return null
+    if (this.lit === this.shouldBeLit()) return null
+
+    const scheduleTick = currentTick + 2
+    this.scheduledStateChange = scheduleTick
+    return scheduleTick
+  }
+
+  private checkBurnout(currentTick: number): boolean {
     if (this.burnedOut) return true
     this.stateChangeTimes = this.stateChangeTimes.filter(time => currentTick - time < 60)
     if (this.stateChangeTimes.length >= 8) {
@@ -60,5 +68,13 @@ export class Torch {
     if (attached.type === "redstone-block") return false
     if ((attached.type === "piston" || attached.type === "sticky-piston") && this.attachedFace.equals(Y.neg)) return false
     return true
+  }
+
+  shouldBeLit(): boolean {
+    const attachedBlock = this.world.getBlock(this.attachedPos)
+    if (!attachedBlock) return true
+    if (attachedBlock.type === "redstone-block") return false
+    if (attachedBlock.type !== "solid" && attachedBlock.type !== "slime") return true
+    return !this.world.isStronglyPowered(this.attachedPos)
   }
 }

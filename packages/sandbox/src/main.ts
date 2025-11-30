@@ -1,6 +1,6 @@
 import { Visualizer } from "./visualizer"
 import {
-  Engine,
+  World,
   Vec,
   Solid,
   Lever,
@@ -13,33 +13,33 @@ import {
   snapshotFromUrl
 } from "@ordo/engine"
 
-function createDemoEngine(): Engine {
-  const engine = new Engine()
+function createDemoWorld(): World {
+  const world = new World()
 
   // Demo scene: lever → dust → repeater → piston
-  engine.placeBlock(new Solid(new Vec(0, -1, 0)))
-  engine.placeBlock(new Solid(new Vec(1, -1, 0)))
-  engine.placeBlock(new Solid(new Vec(2, -1, 0)))
-  engine.placeBlock(new Solid(new Vec(3, -1, 0)))
-  engine.placeBlock(new Solid(new Vec(4, -1, 0)))
+  world.solid(new Vec(0, -1, 0))
+  world.solid(new Vec(1, -1, 0))
+  world.solid(new Vec(2, -1, 0))
+  world.solid(new Vec(3, -1, 0))
+  world.solid(new Vec(4, -1, 0))
 
-  engine.placeBlock(new Lever(new Vec(0, 0, 0), Y.neg, new Vec(0, -1, 0)))
-  engine.placeBlock(new Dust(new Vec(1, 0, 0)))
-  engine.placeBlock(new Dust(new Vec(2, 0, 0)))
-  engine.placeBlock(new Repeater(new Vec(3, 0, 0), new Vec(1, 0, 0)))
-  engine.placeBlock(new Piston(new Vec(4, 0, 0), new Vec(1, 0, 0)))
+  world.lever(new Vec(0, 0, 0), Y.neg) // face pointing down to attach to block below
+  world.dust(new Vec(1, 0, 0))
+  world.dust(new Vec(2, 0, 0))
+  world.repeater(new Vec(3, 0, 0), new Vec(1, 0, 0)) // facing +X
+  world.piston(new Vec(4, 0, 0), new Vec(1, 0, 0)) // facing +X
 
   // Torch attached to a block
-  engine.placeBlock(new Solid(new Vec(0, 0, 2)))
-  engine.placeBlock(new Torch(new Vec(0, 1, 2), Y.neg, new Vec(0, 0, 2)))
+  world.solid(new Vec(0, 0, 2))
+  world.torch(new Vec(0, 1, 2), Y.neg) // face pointing down to attach to block below
 
   // Target block for piston
-  engine.placeBlock(new Solid(new Vec(5, 0, 0)))
+  world.solid(new Vec(5, 0, 0))
 
-  return engine
+  return world
 }
 
-function loadEngineFromUrl(): Engine | null {
+function loadWorldFromUrl(): World | null {
   try {
     const snapshot = snapshotFromUrl(window.location.href)
     if (!snapshot) {
@@ -47,19 +47,19 @@ function loadEngineFromUrl(): Engine | null {
       return null
     }
     console.log("Loaded snapshot:", snapshot.tickCounter, "tick,", snapshot.blocks.length, "blocks")
-    const engine = Engine.fromSnapshot(snapshot)
-    console.log("Engine created, tick:", engine.getCurrentTick())
-    return engine
+    const world = World.fromSnapshot(snapshot)
+    console.log("World created, tick:", world.getCurrentTick())
+    return world
   } catch (e) {
     console.error("Failed to load from URL:", e)
     return null
   }
 }
 
-const engine = loadEngineFromUrl() ?? createDemoEngine()
+const world = loadWorldFromUrl() ?? createDemoWorld()
 
 const container = document.getElementById("canvas-container")!
-const visualizer = new Visualizer(container, engine)
+const visualizer = new Visualizer(container, world)
 
 // UI
 const tickCounter = document.getElementById("tick-counter")!
@@ -71,11 +71,11 @@ let playing = false
 let playInterval: number | null = null
 
 function updateTickDisplay() {
-  tickCounter.textContent = String(engine.getCurrentTick())
+  tickCounter.textContent = String(world.getCurrentTick())
 }
 
 tickBtn.addEventListener("click", () => {
-  engine.tick()
+  world.tick()
   visualizer.update()
   updateTickDisplay()
 })
@@ -86,7 +86,7 @@ playBtn.addEventListener("click", () => {
 
   if (playing) {
     playInterval = window.setInterval(() => {
-      engine.tick()
+      world.tick()
       visualizer.update()
       updateTickDisplay()
     }, 100)
@@ -97,7 +97,7 @@ playBtn.addEventListener("click", () => {
 })
 
 shareBtn.addEventListener("click", async () => {
-  const url = snapshotToUrl(engine.toSnapshot(), window.location.origin + window.location.pathname)
+  const url = snapshotToUrl(world.toSnapshot(), window.location.origin + window.location.pathname)
 
   try {
     await navigator.clipboard.writeText(url)
@@ -138,40 +138,54 @@ blockTypes.forEach(({ id, color, label }) => {
 })
 
 visualizer.onInteract = (pos) => {
-  engine.interact(pos)
-  visualizer.update()
-  updateTickDisplay()
+  const block = world.getBlock(pos)
+  if (block && "type" in block) {
+    const t = block.type
+    if (t === "lever" || t === "dust" || t === "repeater" || t === "button" || t === "comparator") {
+      world.interact(block as any)
+      visualizer.update()
+      updateTickDisplay()
+    }
+  }
 }
 
 visualizer.onPlace = (pos) => {
-  const block = createBlock(selectedBlock, pos)
-  if (block) {
-    engine.placeBlock(block)
+  try {
+    placeBlock(selectedBlock, pos)
     visualizer.update()
+  } catch (e) {
+    console.warn("Failed to place:", e)
   }
 }
 
 visualizer.onRemove = (pos) => {
-  engine.removeBlock(pos)
-  visualizer.update()
+  const block = world.getBlock(pos)
+  if (block) {
+    world.removeBlock(block)
+    visualizer.update()
+  }
 }
 
-function createBlock(type: string, pos: Vec) {
+function placeBlock(type: string, pos: Vec) {
   switch (type) {
     case "solid":
-      return new Solid(pos)
+      world.solid(pos)
+      break
     case "lever":
-      return new Lever(pos, Y.neg, pos.add(Y.neg))
+      world.lever(pos, Y.neg)
+      break
     case "dust":
-      return new Dust(pos)
+      world.dust(pos)
+      break
     case "torch":
-      return new Torch(pos, Y.neg, pos.add(Y.neg))
+      world.torch(pos, Y.neg)
+      break
     case "repeater":
-      return new Repeater(pos, new Vec(1, 0, 0))
+      world.repeater(pos, new Vec(1, 0, 0))
+      break
     case "piston":
-      return new Piston(pos, new Vec(1, 0, 0))
-    default:
-      return null
+      world.piston(pos, new Vec(1, 0, 0))
+      break
   }
 }
 

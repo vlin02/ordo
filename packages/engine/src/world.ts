@@ -250,12 +250,20 @@ export class World {
     this.notifyObserversAt(pos)
   }
 
-  moveBlock(from: Vec, to: Vec): void {
-    const block = this.getBlock(from)
-    if (!block) return
-    this.grid.delete(from.toKey())
-    ;(block as { pos: Vec }).pos = to
-    this.grid.set(to.toKey(), block)
+  moveBlock(block: Block, to: Vec): void {
+    // Only movable blocks can be moved (those with mutable pos)
+    switch (block.type) {
+      case "solid":
+      case "slime":
+      case "observer":
+      case "redstone-block":
+      case "piston":
+      case "sticky-piston":
+        this.grid.delete(block.pos.toKey())
+        block.pos = to
+        this.grid.set(to.toKey(), block)
+        break
+    }
   }
 
   notifyObserversAt(changedPos: Vec): void {
@@ -264,20 +272,18 @@ export class World {
       if (block?.type === "observer") {
         const observedPos = block.pos.add(block.facing)
         if (observedPos.equals(changedPos)) {
-          this.triggerObserverPulse(block)
+          this.scheduleObserverPulse(block)
         }
       }
     }
   }
 
-  triggerObserverPulse(observer: Observer): void {
-    if (observer.scheduledPulseStart !== null || observer.scheduledPulseEnd !== null) return
-    const startTick = this.tickCounter + 2
-    const endTick = startTick + 2
-    observer.scheduledPulseStart = startTick
-    observer.scheduledPulseEnd = endTick
-    this.scheduleEvent(startTick, observer.pos)
-    this.scheduleEvent(endTick, observer.pos)
+  scheduleObserverPulse(observer: Observer): void {
+    const pulse = observer.schedulePulse(this.tickCounter)
+    if (pulse) {
+      this.scheduleEvent(pulse.start, observer.pos)
+      this.scheduleEvent(pulse.end, observer.pos)
+    }
   }
 
   private processBlockUpdates(): void {
@@ -317,10 +323,18 @@ export class World {
   }
 
   private shouldBlockDrop(block: Block): boolean {
-    if ("shouldDrop" in block && typeof block.shouldDrop === "function") {
-      return block.shouldDrop()
+    switch (block.type) {
+      case "dust":
+      case "lever":
+      case "button":
+      case "pressure-plate":
+      case "repeater":
+      case "comparator":
+      case "torch":
+        return block.shouldDrop()
+      default:
+        return false
     }
-    return false
   }
 
   private processBlockUpdate(pos: Vec): boolean {
@@ -331,11 +345,8 @@ export class World {
 
     switch (block.type) {
       case "dust": {
-        const oldSignal = block.signalStrength
-        const newSignal = this.calculateDustSignal(block)
-        if (newSignal !== oldSignal) {
-          block.signalStrength = newSignal
-          changed = true
+        changed = block.updateSignal()
+        if (changed) {
           this.notifyObserversAt(pos)
           for (const off of DIAGONALS_Y) {
             const checkPos = pos.add(off)
@@ -349,87 +360,23 @@ export class World {
       }
       case "solid":
       case "slime": {
-        const oldState = block.powerState
-        const newState = this.calculatePowerState(block.pos)
-        if (newState !== oldState) {
-          block.powerState = newState
-          changed = true
-        }
+        changed = block.updatePowerState()
         break
       }
       case "repeater": {
-        // Try to consume scheduled output change
-        if (
-          block.scheduledOutputChange !== null &&
-          this.tickCounter >= block.scheduledOutputChange
-        ) {
-          const newState = block.scheduledOutputState!
-          block.outputOn = newState
-          block.scheduledOutputChange = null
-          block.scheduledOutputState = null
-          changed = true
-          // If turned on but input is now off, schedule turning off (pulse extension)
-          if (newState && !this.isRepeaterPowered(block) && !block.locked) {
-            const offTick = this.tickCounter + block.delay
-            block.scheduledOutputChange = offTick
-            block.scheduledOutputState = false
-            this.scheduleEvent(offTick, block.pos)
-          }
-        }
+        const result = block.processScheduledOutput(this.tickCounter)
+        if (result.changed) changed = true
+        if (result.scheduleOffTick) this.scheduleEvent(result.scheduleOffTick, block.pos)
 
-        // Update input state
-        const newPowered = this.isRepeaterPowered(block)
-        const newLocked = this.isRepeaterLocked(block)
-        if (newPowered !== block.powered || newLocked !== block.locked) {
-          block.powered = newPowered
-          block.locked = newLocked
-        }
-
-        // Schedule output changes based on input
-        if (!block.locked) {
-          if (block.powered) {
-            if (!block.outputOn && block.scheduledOutputState !== true) {
-              const scheduleTick = this.tickCounter + block.delay
-              block.scheduledOutputChange = scheduleTick
-              block.scheduledOutputState = true
-              this.scheduleEvent(scheduleTick, block.pos)
-            } else if (block.scheduledOutputState === false) {
-              block.scheduledOutputChange = null
-              block.scheduledOutputState = null
-            }
-          } else {
-            if (block.outputOn && block.scheduledOutputState !== false) {
-              const scheduleTick = this.tickCounter + block.delay
-              block.scheduledOutputChange = scheduleTick
-              block.scheduledOutputState = false
-              this.scheduleEvent(scheduleTick, block.pos)
-            }
-          }
-        }
+        block.updateInputState()
+        const scheduleTick = block.checkScheduleOutput(this.tickCounter)
+        if (scheduleTick) this.scheduleEvent(scheduleTick, block.pos)
         break
       }
       case "torch": {
-        // Try to consume scheduled toggle
-        if (block.scheduledStateChange !== null && this.tickCounter >= block.scheduledStateChange) {
-          if (!block.burnedOut) {
-            const newLit = !block.lit
-            const newTimes = [...block.stateChangeTimes, this.tickCounter]
-            block.lit = newLit
-            block.stateChangeTimes = newTimes
-            block.scheduledStateChange = null
-            changed = true
-          } else {
-            block.scheduledStateChange = null
-          }
-        }
-
-        // Check burnout and schedule toggle if needed
-        const shouldSchedule = this.updateTorchState(block)
-        if (shouldSchedule && block.scheduledStateChange === null) {
-          const scheduleTick = this.tickCounter + 2
-          block.scheduledStateChange = scheduleTick
-          this.scheduleEvent(scheduleTick, block.pos)
-        }
+        changed = block.processScheduledToggle(this.tickCounter)
+        const scheduleTick = block.checkAndScheduleToggle(this.tickCounter)
+        if (scheduleTick) this.scheduleEvent(scheduleTick, block.pos)
         break
       }
       case "piston":
@@ -444,66 +391,26 @@ export class World {
         break
       }
       case "observer": {
-        // Try to start pulse
-        if (block.scheduledPulseStart !== null && this.tickCounter >= block.scheduledPulseStart) {
-          block.outputOn = true
-          block.scheduledPulseStart = null
-          changed = true
-        }
-        // Try to end pulse
-        if (block.scheduledPulseEnd !== null && this.tickCounter >= block.scheduledPulseEnd) {
-          block.outputOn = false
-          block.scheduledPulseEnd = null
-          changed = true
-        }
+        if (block.processScheduledPulseStart(this.tickCounter)) changed = true
+        if (block.processScheduledPulseEnd(this.tickCounter)) changed = true
         break
       }
       case "button": {
-        if (block.scheduledRelease !== null && this.tickCounter >= block.scheduledRelease) {
-          block.pressed = false
-          block.scheduledRelease = null
-          changed = true
-        }
+        changed = block.processScheduledRelease(this.tickCounter)
         break
       }
       case "pressure-plate": {
-        if (
-          block.scheduledDeactivationCheck !== null &&
-          this.tickCounter >= block.scheduledDeactivationCheck
-        ) {
-          const result = block.tryCheckDeactivation(this.tickCounter)
-          if (result.deactivated) {
-            changed = true
-          } else if (result.nextCheckTick !== undefined) {
-            this.scheduleEvent(result.nextCheckTick, block.pos)
-          }
-        }
+        const result = block.processScheduledDeactivation(this.tickCounter)
+        if (result.deactivated) changed = true
+        if (result.nextCheckTick) this.scheduleEvent(result.nextCheckTick, block.pos)
         break
       }
       case "comparator": {
-        // Try to consume scheduled output change
-        if (
-          block.scheduledOutputChange !== null &&
-          this.tickCounter >= block.scheduledOutputChange
-        ) {
-          const newSignal = block.scheduledOutputSignal!
-          block.outputSignal = newSignal
-          block.scheduledOutputChange = null
-          block.scheduledOutputSignal = null
-          changed = true
-        }
-
-        // Calculate new inputs and schedule output if needed
-        const { rear, left, right, output: newOutput } = this.calculateComparatorState(block)
-        if (rear !== block.rearSignal || left !== block.leftSignal || right !== block.rightSignal) {
-          block.rearSignal = rear
-          block.leftSignal = left
-          block.rightSignal = right
-        }
-        if (newOutput !== block.outputSignal && block.scheduledOutputChange === null) {
+        changed = block.processScheduledOutput(this.tickCounter)
+        const { needsSchedule, newOutput } = block.updateInputs()
+        if (needsSchedule) {
           const scheduleTick = this.tickCounter + 2
-          block.scheduledOutputChange = scheduleTick
-          block.scheduledOutputSignal = newOutput
+          block.scheduleOutput(scheduleTick, newOutput)
           this.scheduleEvent(scheduleTick, block.pos)
         }
         break
@@ -519,33 +426,41 @@ export class World {
     return changed
   }
 
-  // DEBUG: Query methods for observability
-  shouldTorchBeLit(torch: Torch): boolean {
-    const attachedBlock = this.getBlock(torch.attachedPos)
-    if (!attachedBlock) return true
-    if (attachedBlock.type === "redstone-block") return false
-    if (attachedBlock.type !== "solid" && attachedBlock.type !== "slime") return true
+  getSignalToward(fromPos: Vec, towardPos: Vec): number {
+    const block = this.getBlock(fromPos)
+    if (!block) return 0
 
-    return !this.isStronglyPowered(torch.attachedPos)
-  }
+    // Direct sources
+    if (block.type === "lever" && block.on) return 15
+    if (block.type === "torch" && block.lit) return 15
+    if (block.type === "button" && block.pressed) return 15
+    if (block.type === "redstone-block") return 15
+    if (block.type === "pressure-plate" && block.active) return block.getOutputSignal()
+    if (block.type === "dust") return block.signalStrength
 
-  private updateTorchState(torch: Torch): boolean {
-    if (torch.isBurnedOut(this.tickCounter)) return false
-    const shouldBeLit = this.shouldTorchBeLit(torch)
-    if (torch.lit === shouldBeLit) return false
-    return true
-  }
-
-  outputsTo(block: Block, targetPos: Vec): number {
+    // Directional outputs
     if (block.type === "repeater" && block.outputOn) {
-      if (block.pos.add(block.facing).equals(targetPos)) return 15
+      if (block.pos.add(block.facing).equals(towardPos)) return 15
     }
     if (block.type === "observer" && block.outputOn) {
-      if (block.pos.add(block.facing.neg).equals(targetPos)) return 15
+      if (block.pos.add(block.facing.neg).equals(towardPos)) return 15
     }
     if (block.type === "comparator" && block.outputSignal > 0) {
-      if (block.pos.add(block.facing).equals(targetPos)) return block.outputSignal
+      if (block.pos.add(block.facing).equals(towardPos)) return block.outputSignal
     }
+
+    // Strongly-powered conductive block (dust only receives from strongly-powered)
+    if ((block.type === "solid" || block.type === "slime") && this.isStronglyPowered(fromPos)) return 15
+
+    return 0
+  }
+
+  getSignalTowardIncludingWeak(fromPos: Vec, towardPos: Vec): number {
+    const signal = this.getSignalToward(fromPos, towardPos)
+    if (signal > 0) return signal
+
+    const block = this.getBlock(fromPos)
+    if ((block?.type === "solid" || block?.type === "slime") && this.isWeaklyPowered(fromPos)) return 15
     return 0
   }
 
@@ -554,15 +469,15 @@ export class World {
       const block = this.getBlock(adjPos)
       if (!block) continue
 
-      if (block.type === "lever" && block.on && block.attachedPos.equals(pos)) {
-        return true
-      }
+      if (block.type === "lever" && block.on && block.attachedPos.equals(pos)) return true
+      if (block.type === "button" && block.pressed && block.attachedPos.equals(pos)) return true
 
-      if (block.type === "button" && block.pressed && block.attachedPos.equals(pos)) {
-        return true
+      // Directional outputs (repeater, comparator, observer)
+      if (this.getSignalToward(adjPos, pos) > 0) {
+        if (block.type === "repeater" || block.type === "comparator" || block.type === "observer") {
+          return true
+        }
       }
-
-      if (this.outputsTo(block, pos) > 0) return true
     }
 
     const below = pos.add(Y.neg)
@@ -572,7 +487,6 @@ export class World {
     const above = pos.add(Y)
     const aboveBlock = this.getBlock(above)
     if (aboveBlock?.type === "pressure-plate" && aboveBlock.active) return true
-    // Note: dust above WEAKLY powers block beneath, not strongly (moved to receivesWeakPower)
 
     return false
   }
@@ -584,24 +498,17 @@ export class World {
       const block = this.getBlock(adjPos)
       if (!block) continue
 
-      if (block.type === "dust" && block.signalStrength >= 1 && this.isDustPointingAt(block, pos)) {
-        return true
-      }
+      if (block.type === "dust" && block.signalStrength >= 1 && block.isPointingAt(pos)) return true
 
       if (block.type === "torch" && block.lit) {
         const aboveTorch = block.pos.add(Y)
-        if (!aboveTorch.equals(pos) && !block.attachedPos.equals(pos)) {
-          return true
-        }
+        if (!aboveTorch.equals(pos) && !block.attachedPos.equals(pos)) return true
       }
     }
 
-    // Dust above weakly powers block beneath it
     const above = pos.add(Y)
     const aboveBlock = this.getBlock(above)
-    if (aboveBlock?.type === "dust" && aboveBlock.signalStrength >= 1) {
-      return true
-    }
+    if (aboveBlock?.type === "dust" && aboveBlock.signalStrength >= 1) return true
 
     return false
   }
@@ -623,351 +530,6 @@ export class World {
     return state === "weakly-powered" || state === "strongly-powered"
   }
 
-  hasFullSignal(pos: Vec): boolean {
-    for (const adjPos of pos.adjacents()) {
-      const block = this.getBlock(adjPos)
-      if (!block) continue
-
-      if (block.type === "lever" && block.on) return true
-      if (block.type === "torch" && block.lit) return true
-      if (block.type === "button" && block.pressed) return true
-      if (block.type === "redstone-block") return true
-      if (block.type === "pressure-plate" && block.active) return true
-      if (this.outputsTo(block, pos) > 0) return true
-      if (this.isStronglyPowered(adjPos)) return true
-    }
-
-    return false
-  }
-
-  private calculatePowerState(pos: Vec): PowerState {
-    if (this.receivesStrongPower(pos)) {
-      return "strongly-powered"
-    } else if (this.receivesWeakPower(pos)) {
-      return "weakly-powered"
-    } else {
-      return "unpowered"
-    }
-  }
-
-  calculateDustSignal(dust: Dust): number {
-    if (this.hasFullSignal(dust.pos)) {
-      return 15
-    }
-
-    let maxSignal = 0
-    const connections = this.findDustConnections(dust)
-    for (const connPos of connections) {
-      const connBlock = this.getBlock(connPos)
-      if (connBlock?.type === "dust") {
-        const signal = connBlock.signalStrength - 1
-        if (signal > maxSignal) {
-          maxSignal = signal
-        }
-      }
-    }
-
-    return maxSignal
-  }
-
-  isDustPointingAt(dust: Dust, target: Vec): boolean {
-    if (dust.shape === "dot") return false
-
-    const dy = target.y - dust.pos.y
-    if (dy !== 0) return false
-
-    const dx = target.x - dust.pos.x
-    const dz = target.z - dust.pos.z
-    if (!((Math.abs(dx) === 1 && dz === 0) || (dx === 0 && Math.abs(dz) === 1))) {
-      return false
-    }
-
-    const connections = this.findDustConnections(dust)
-
-    // No connections = cross shape = points all 4 horizontal directions
-    if (connections.length === 0) return true
-
-    // Only points toward connected directions
-    for (const conn of connections) {
-      const connDx = Math.sign(conn.x - dust.pos.x)
-      const connDz = Math.sign(conn.z - dust.pos.z)
-      if (connDx === dx && connDz === dz) return true
-    }
-
-    return false
-  }
-
-  findDustConnections(dust: Dust): Vec[] {
-    const connections: Vec[] = []
-    const { pos } = dust
-
-    for (const dir of HORIZONTALS) {
-      const adjPos = pos.add(dir)
-      const adjBlock = this.getBlock(adjPos)
-
-      if (adjBlock?.type === "dust" || adjBlock?.type === "lever" || adjBlock?.type === "redstone-block" || adjBlock?.type === "torch") {
-        connections.push(adjPos)
-        continue
-      }
-
-      if (adjBlock?.type === "repeater") {
-        const repeaterBack = adjBlock.pos.add(adjBlock.facing.neg)
-        const repeaterFront = adjBlock.pos.add(adjBlock.facing)
-        if (pos.equals(repeaterBack) || pos.equals(repeaterFront)) {
-          connections.push(adjPos)
-          continue
-        }
-      }
-
-      if (adjBlock?.type === "observer") {
-        const observerBack = adjBlock.pos.add(adjBlock.facing.neg)
-        if (pos.equals(observerBack)) {
-          connections.push(adjPos)
-          continue
-        }
-      }
-
-      if (adjBlock?.type === "comparator") {
-        const comparatorBack = adjBlock.pos.add(adjBlock.facing.neg)
-        const comparatorFront = adjBlock.pos.add(adjBlock.facing)
-        if (pos.equals(comparatorBack) || pos.equals(comparatorFront)) {
-          connections.push(adjPos)
-          continue
-        }
-      }
-
-      // Step-down: dust below adjacent position (if not blocked by solid/slime)
-      if (!adjBlock || (adjBlock.type !== "solid" && adjBlock.type !== "slime")) {
-        const belowPos = adjPos.add(Y.neg)
-        const belowBlock = this.getBlock(belowPos)
-        if (belowBlock?.type === "dust") {
-          const aboveBelow = belowPos.add(Y)
-          const aboveBelowBlock = this.getBlock(aboveBelow)
-          const blocksDownward =
-            aboveBelowBlock?.type === "solid" || aboveBelowBlock?.type === "slime"
-          if (!blocksDownward) {
-            connections.push(belowPos)
-          }
-        }
-      }
-
-      // Step-up: dust on top of adjacent solid/slime (if not blocked above)
-      if (adjBlock?.type === "solid" || adjBlock?.type === "slime") {
-        const aboveAdjPos = adjPos.add(Y)
-        const aboveAdjBlock = this.getBlock(aboveAdjPos)
-        if (aboveAdjBlock?.type === "dust") {
-          const aboveCurrentDust = pos.add(Y)
-          const aboveCurrentBlock = this.getBlock(aboveCurrentDust)
-          const blocksUpward = aboveCurrentBlock?.type === "solid" || aboveCurrentBlock?.type === "slime"
-          if (!blocksUpward) {
-            connections.push(aboveAdjPos)
-          }
-        }
-      }
-    }
-
-    return connections
-  }
-
-  isRepeaterPowered(repeater: Repeater): boolean {
-    const backPos = repeater.pos.add(repeater.facing.neg)
-    const backBlock = this.getBlock(backPos)
-
-    if (backBlock?.type === "lever" && backBlock.on) return true
-    if (backBlock?.type === "dust" && backBlock.signalStrength >= 1) return true
-
-    if (this.isWeaklyPowered(backPos)) {
-      return true
-    }
-
-    if (this.hasFullSignal(backPos)) return true
-    if (backBlock && this.outputsTo(backBlock, repeater.pos) > 0) return true
-
-    return false
-  }
-
-  isRepeaterLocked(repeater: Repeater): boolean {
-    for (const sideDir of repeater.facing.perpendiculars()) {
-      const sidePos = repeater.pos.add(sideDir)
-      const sideBlock = this.getBlock(sidePos)
-
-      if (sideBlock?.type === "repeater") {
-        const sideFront = sideBlock.pos.add(sideBlock.facing)
-        if (sideFront.equals(repeater.pos) && sideBlock.outputOn) {
-          return true
-        }
-      }
-
-      if (sideBlock?.type === "comparator") {
-        const sideFront = sideBlock.pos.add(sideBlock.facing)
-        if (sideFront.equals(repeater.pos) && sideBlock.outputSignal > 0) {
-          return true
-        }
-      }
-    }
-
-    return false
-  }
-
-  // COMPARATOR LOGIC
-  private calculateComparatorState(comparator: Comparator): {
-    rear: number
-    left: number
-    right: number
-    output: number
-  } {
-    const backPos = comparator.pos.add(comparator.facing.neg)
-    const rear = this.getSignalStrengthAt(backPos, comparator.pos)
-
-    const sideDirections = comparator.facing.perpendiculars()
-    const left = this.getComparatorSideSignal(comparator.pos, sideDirections[0])
-    const right = this.getComparatorSideSignal(comparator.pos, sideDirections[1])
-
-    const sideMax = Math.max(left, right)
-    let output: number
-    if (comparator.mode === "comparison") {
-      output = rear >= sideMax ? rear : 0
-    } else {
-      output = Math.max(0, rear - sideMax)
-    }
-
-    return { rear, left, right, output }
-  }
-
-  getSignalStrengthAt(pos: Vec, towardPos: Vec): number {
-    const block = this.getBlock(pos)
-    if (!block) return 0
-
-    if (block.type === "dust") return block.signalStrength
-    if (block.type === "redstone-block") return 15
-    if (block.type === "repeater") {
-      const front = block.pos.add(block.facing)
-      if (front.equals(towardPos) && block.outputOn) return 15
-    }
-    if (block.type === "comparator") {
-      const front = block.pos.add(block.facing)
-      if (front.equals(towardPos)) return block.outputSignal
-    }
-    if (block.type === "observer") {
-      const back = block.pos.add(block.facing.neg)
-      if (back.equals(towardPos) && block.outputOn) return 15
-    }
-    if (block.type === "torch" && block.lit) return 15
-    if (block.type === "lever" && block.on) return 15
-    if (block.type === "button" && block.pressed) return 15
-    if (block.type === "pressure-plate" && block.active) return block.getOutputSignal()
-    if ((block.type === "solid" || block.type === "slime") && this.isWeaklyPowered(pos)) return 15
-
-    return 0
-  }
-
-  getComparatorSideSignal(comparatorPos: Vec, sideDir: Vec): number {
-    const sidePos = comparatorPos.add(sideDir)
-    const block = this.getBlock(sidePos)
-    if (!block) return 0
-
-    if (block.type === "dust") return block.signalStrength
-    if (block.type === "redstone-block") return 15
-
-    return this.outputsTo(block, comparatorPos)
-  }
-
-  isBlockMovable(block: Block): boolean {
-    if (block.type === "solid") return true
-    if (block.type === "observer") return true
-    if (block.type === "slime") return true
-    if ((block.type === "piston" || block.type === "sticky-piston") && !block.extended) return true
-    return false
-  }
-
-  findPushableBlocks(piston: Piston): Vec[] | null {
-    const toMove = new Set<string>()
-    const toCheck: Vec[] = []
-    const direction = piston.facing
-
-    const frontPos = piston.pos.add(direction)
-    const frontBlock = this.getBlock(frontPos)
-    if (frontBlock && this.isBlockMovable(frontBlock)) {
-      toCheck.push(frontPos)
-      toMove.add(frontPos.toKey())
-    } else if (frontBlock) {
-      return null
-    }
-
-    while (toCheck.length > 0) {
-      const pos = toCheck.shift()!
-      const block = this.getBlock(pos)
-      if (!block) continue
-
-      if ((block.type === "piston" || block.type === "sticky-piston") && block.extended) {
-        return null
-      }
-
-      const destPos = pos.add(direction)
-      const destBlock = this.getBlock(destPos)
-      if (destBlock && !toMove.has(destPos.toKey())) {
-        if (
-          (destBlock.type === "piston" || destBlock.type === "sticky-piston") &&
-          destBlock.extended
-        ) {
-          return null
-        }
-        if (this.isBlockMovable(destBlock)) {
-          toMove.add(destPos.toKey())
-          toCheck.push(destPos)
-        } else if (!this.isBlockDestroyable(destBlock)) {
-          return null
-        }
-      }
-
-      if (block.type === "slime") {
-        for (const adjPos of pos.adjacents()) {
-          if (toMove.has(adjPos.toKey())) continue
-          if (adjPos.equals(piston.pos)) continue
-
-          const adjBlock = this.getBlock(adjPos)
-          if (adjBlock && this.isBlockMovable(adjBlock)) {
-            toMove.add(adjPos.toKey())
-            toCheck.push(adjPos)
-          }
-        }
-      }
-
-      if (toMove.size > 12) {
-        return null
-      }
-    }
-
-    const positions = Array.from(toMove).map(Vec.fromKey)
-    for (const pos of positions) {
-      const destPos = pos.add(direction)
-      if (!toMove.has(destPos.toKey())) {
-        const destBlock = this.getBlock(destPos)
-        if (destBlock && !this.isBlockDestroyable(destBlock)) {
-          return null
-        }
-      }
-    }
-
-    return this.sortBlocksForPush(positions, direction)
-  }
-
-  isBlockDestroyable(block: Block): boolean {
-    return [
-      "dust",
-      "lever",
-      "repeater",
-      "torch",
-      "button",
-      "pressure-plate",
-      "comparator",
-    ].includes(block.type)
-  }
-
-  private sortBlocksForPush(positions: Vec[], direction: Vec): Vec[] {
-    return positions.sort((a, b) => a.dot(direction) - b.dot(direction))
-  }
-
   executePush(blockPositions: Vec[], direction: Vec): void {
     if (blockPositions.length === 0) {
       return
@@ -982,7 +544,7 @@ export class World {
         const newPos = pos.add(direction)
 
         const destBlock = this.getBlock(newPos)
-        if (destBlock && this.isBlockDestroyable(destBlock)) {
+        if (destBlock && destBlock.movability === "destroy") {
           this.grid.delete(newPos.toKey())
           this.notifyObserversAt(newPos)
         }
@@ -1000,7 +562,7 @@ export class World {
     }
 
     for (const observer of movedObservers) {
-      this.triggerObserverPulse(observer)
+      this.scheduleObserverPulse(observer)
     }
 
     for (const pos of blockPositions) {

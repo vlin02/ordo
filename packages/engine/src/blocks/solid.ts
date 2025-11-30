@@ -3,8 +3,11 @@ import type { World } from "../world.js"
 
 export type PowerState = "unpowered" | "weakly-powered" | "strongly-powered"
 
+export type Movability = "normal" | "destroy" | "immovable"
+
 export class Solid {
   readonly type = "solid" as const
+  readonly movability = "normal" as const
   readonly world: World
   pos: Vec
   powerState: PowerState
@@ -13,5 +16,20 @@ export class Solid {
     this.world = world
     this.pos = pos
     this.powerState = "unpowered"
+  }
+
+  updatePowerState(): boolean {
+    const newState = this.calculatePowerState()
+    if (newState !== this.powerState) {
+      this.powerState = newState
+      return true
+    }
+    return false
+  }
+
+  private calculatePowerState(): PowerState {
+    if (this.world.receivesStrongPower(this.pos)) return "strongly-powered"
+    if (this.world.receivesWeakPower(this.pos)) return "weakly-powered"
+    return "unpowered"
   }
 }

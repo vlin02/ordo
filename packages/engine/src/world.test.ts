@@ -492,13 +492,13 @@ describe("Redstone Engine - Edge Cases", () => {
     expect(slime3.powerState).toBe("strongly-powered")
     expect(torch.lit).toBe(false)
 
-    // Dust NOT supported on slime (only solid/observer)
+    // Conductive blocks (solid, slime) support dust
     const world4 = new World()
     world4.slime(v(0, 0, 0))
     const dust = world4.dust(v(0, 1, 0))
-    expect(world4.getBlock(dust.pos)).toBe(null)
+    expect(world4.getBlock(dust.pos)).toBe(dust)
 
-    // But repeater IS supported
+    // Repeater also supported on slime
     world4.slime(v(1, 0, 0))
     const repeater = world4.repeater(v(1, 1, 0), PX)
     expect(world4.getBlock(repeater.pos)).toBe(repeater)
@@ -732,7 +732,7 @@ describe("Redstone Engine - Edge Cases", () => {
 
     // Dust should connect and receive SS=15
     expect(dust.signalStrength).toBe(15)
-    expect(world.isDustPointingAt(dust, v(1, 0, 0))).toBe(true)
+    expect(dust.isPointingAt(v(1, 0, 0))).toBe(true)
   })
 
   it("slime block blocks dust step-connections like solid", () => {

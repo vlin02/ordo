@@ -3,6 +3,7 @@ import type { World } from "../world.js"
 
 export class Lever {
   readonly type = "lever" as const
+  readonly movability = "destroy" as const
   readonly world: World
   readonly pos: Vec
   readonly attachedFace: Vec

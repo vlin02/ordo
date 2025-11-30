@@ -16,14 +16,3 @@ We are not optimizing for efficiency but rather simplicity and conciseness with 
 
 world.ts - the core class for performing updates. World ENABLES all block behavior, but does not validate
 player.ts - a safe wrapper on top of world to perform spec-compliant SAFE actions for a single player. Performs validation
-
-spec:
-**Coverage**: Redstone behavior, visual behavior (ex. redstone dust pattern), physical behavior (gravity), player interaction validation (ex. block placement).
-**Target**: Minecraft 1.21 Java Edition game-accurate engine.
-**Principles**:
-
-- Conciseness
-- Unambiguous — only one interpretation
-- Implementation independent
-- Complete — covers all scope mentioned
-- Accurate — faithful to 1.21

@@ -1,6 +1,6 @@
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
-import { Vec, type Engine, type Block } from "@ordo/engine"
+import { Vec, type World, type Block } from "@ordo/engine"
 
 const BLOCK_SIZE = 1
 const HALF = BLOCK_SIZE / 2
@@ -45,7 +45,7 @@ export class Visualizer {
 
   constructor(
     private container: HTMLElement,
-    private engine: Engine
+    private world: World
   ) {
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x0a0a0f)
@@ -197,7 +197,7 @@ export class Visualizer {
       for (let y = -5; y <= 10; y++) {
         for (let z = -10; z <= 20; z++) {
           const pos = new Vec(x, y, z)
-          const block = this.engine.getBlock(pos)
+          const block = this.world.getBlock(pos)
           if (block) {
             callback({ x, y, z }, block)
           }
@@ -382,7 +382,7 @@ export class Visualizer {
 
     for (const dir of directions) {
       const adjPos = new Vec(pos.x + dir.x, pos.y, pos.z + dir.z)
-      const adjBlock = this.engine.getBlock(adjPos)
+      const adjBlock = this.world.getBlock(adjPos)
 
       // Direct connection to dust, lever, torch
       if (adjBlock?.type === "dust" || adjBlock?.type === "lever" || adjBlock?.type === "torch") {
@@ -430,7 +430,7 @@ export class Visualizer {
       // Step-down: dust below adjacent air
       if (!adjBlock || adjBlock.type !== "solid") {
         const belowPos = new Vec(adjPos.x, adjPos.y - 1, adjPos.z)
-        const belowBlock = this.engine.getBlock(belowPos)
+        const belowBlock = this.world.getBlock(belowPos)
         if (belowBlock?.type === "dust") {
           connections.push(dir)
           continue
@@ -440,11 +440,11 @@ export class Visualizer {
       // Step-up: dust on top of adjacent solid
       if (adjBlock?.type === "solid") {
         const abovePos = new Vec(adjPos.x, adjPos.y + 1, adjPos.z)
-        const aboveBlock = this.engine.getBlock(abovePos)
+        const aboveBlock = this.world.getBlock(abovePos)
         if (aboveBlock?.type === "dust") {
           // Check if not blocked by solid above current dust
           const aboveCurrent = new Vec(pos.x, pos.y + 1, pos.z)
-          const blockAbove = this.engine.getBlock(aboveCurrent)
+          const blockAbove = this.world.getBlock(aboveCurrent)
           if (blockAbove?.type !== "solid") {
             connections.push(dir)
           }

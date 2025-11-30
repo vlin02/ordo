@@ -5,9 +5,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "dev": "tsc --watch",
     "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "example": "tsx src/example.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",

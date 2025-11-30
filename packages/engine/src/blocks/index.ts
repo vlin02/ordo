@@ -1,4 +1,4 @@
-export { Solid, type PowerState } from "./solid.js"
+export { Solid, type PowerState, type Movability } from "./solid.js"
 export { Lever } from "./lever.js"
 export { Dust, type DustShape } from "./dust.js"
 export { Piston } from "./piston.js"

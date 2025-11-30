@@ -5,6 +5,7 @@ export type PressurePlateVariant = "wood" | "stone" | "light-weighted" | "heavy-
 
 export class PressurePlate {
   readonly type = "pressure-plate" as const
+  readonly movability = "destroy" as const
   readonly world: World
   readonly pos: Vec
   readonly variant: PressurePlateVariant
@@ -45,7 +46,7 @@ export class PressurePlate {
     return this.scheduledDeactivationCheck
   }
 
-  tryCheckDeactivation(currentTick: number): { deactivated: boolean; nextCheckTick?: number } {
+  processScheduledDeactivation(currentTick: number): { deactivated: boolean; nextCheckTick?: number } {
     if (this.scheduledDeactivationCheck === null || currentTick < this.scheduledDeactivationCheck) {
       return { deactivated: false }
     }

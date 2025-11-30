@@ -3,6 +3,7 @@ import type { World } from "../world.js"
 
 export class Observer {
   readonly type = "observer" as const
+  readonly movability = "normal" as const
   readonly world: World
   pos: Vec
   readonly facing: Vec
@@ -26,14 +27,14 @@ export class Observer {
     return { start: this.scheduledPulseStart, end: this.scheduledPulseEnd }
   }
 
-  tryStartPulse(currentTick: number): boolean {
+  processScheduledPulseStart(currentTick: number): boolean {
     if (this.scheduledPulseStart === null || currentTick < this.scheduledPulseStart) return false
     this.outputOn = true
     this.scheduledPulseStart = null
     return true
   }
 
-  tryEndPulse(currentTick: number): boolean {
+  processScheduledPulseEnd(currentTick: number): boolean {
     if (this.scheduledPulseEnd === null || currentTick < this.scheduledPulseEnd) return false
     this.outputOn = false
     this.scheduledPulseEnd = null

@@ -5,6 +5,7 @@ export type ButtonVariant = "stone" | "wood"
 
 export class Button {
   readonly type = "button" as const
+  readonly movability = "destroy" as const
   readonly world: World
   readonly pos: Vec
   readonly attachedFace: Vec
@@ -31,7 +32,7 @@ export class Button {
     return this.scheduledRelease
   }
 
-  tryRelease(currentTick: number): boolean {
+  processScheduledRelease(currentTick: number): boolean {
     if (this.scheduledRelease === null || currentTick < this.scheduledRelease) return false
     this.pressed = false
     this.scheduledRelease = null

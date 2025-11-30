@@ -3,6 +3,7 @@ import type { World } from "../world.js"
 
 export class Repeater {
   readonly type = "repeater" as const
+  readonly movability = "destroy" as const
   readonly world: World
   readonly pos: Vec
   readonly facing: Vec
@@ -42,7 +43,7 @@ export class Repeater {
     this.scheduledOutputState = null
   }
 
-  tryConsumeSchedule(currentTick: number): { changed: boolean; scheduleOff?: number } {
+  processScheduledOutput(currentTick: number): { changed: boolean; scheduleOffTick?: number } {
     if (this.scheduledOutputChange === null || currentTick < this.scheduledOutputChange) {
       return { changed: false }
     }
@@ -52,16 +53,72 @@ export class Repeater {
     this.scheduledOutputChange = null
     this.scheduledOutputState = null
 
-    if (newState && !this.powered && !this.locked) {
-      return { changed: true, scheduleOff: currentTick + this.delay }
+    // Pulse extension: if turned on but input is now off, schedule turning off
+    if (newState && !this.isPowered() && !this.locked) {
+      const offTick = currentTick + this.delay
+      this.scheduledOutputChange = offTick
+      this.scheduledOutputState = false
+      return { changed: true, scheduleOffTick: offTick }
     }
 
     return { changed: true }
+  }
+
+  updateInputState(): void {
+    this.powered = this.isPowered()
+    this.locked = this.isLocked()
+  }
+
+  checkScheduleOutput(currentTick: number): number | null {
+    if (this.locked) return null
+
+    if (this.powered) {
+      if (!this.outputOn && this.scheduledOutputState !== true) {
+        const scheduleTick = currentTick + this.delay
+        this.scheduledOutputChange = scheduleTick
+        this.scheduledOutputState = true
+        return scheduleTick
+      } else if (this.scheduledOutputState === false) {
+        this.scheduledOutputChange = null
+        this.scheduledOutputState = null
+      }
+    } else {
+      if (this.outputOn && this.scheduledOutputState !== false) {
+        const scheduleTick = currentTick + this.delay
+        this.scheduledOutputChange = scheduleTick
+        this.scheduledOutputState = false
+        return scheduleTick
+      }
+    }
+    return null
   }
 
   shouldDrop(): boolean {
     const below = this.world.getBlock(this.pos.add(Y.neg))
     if (!below) return true
     return below.type !== "solid" && below.type !== "slime"
+  }
+
+  isPowered(): boolean {
+    const backPos = this.pos.add(this.facing.neg)
+    return this.world.getSignalTowardIncludingWeak(backPos, this.pos) >= 1
+  }
+
+  isLocked(): boolean {
+    for (const sideDir of this.facing.perpendiculars()) {
+      const sidePos = this.pos.add(sideDir)
+      const sideBlock = this.world.getBlock(sidePos)
+
+      if (sideBlock?.type === "repeater") {
+        const sideFront = sideBlock.pos.add(sideBlock.facing)
+        if (sideFront.equals(this.pos) && sideBlock.outputOn) return true
+      }
+
+      if (sideBlock?.type === "comparator") {
+        const sideFront = sideBlock.pos.add(sideBlock.facing)
+        if (sideFront.equals(this.pos) && sideBlock.outputSignal > 0) return true
+      }
+    }
+    return false
   }
 }
